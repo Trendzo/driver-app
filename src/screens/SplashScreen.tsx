@@ -56,11 +56,11 @@ export default function SplashScreen({ onDone }: { onDone: () => void }) {
           style={styles.badge}
         >
           <MaterialCommunityIcons name="moped" size={18} color="#000" />
-          <Text style={styles.badgeText}>DELIVERY PARTNER</Text>
+          <Text style={styles.badgeText}>DELIVERY AGENT</Text>
         </MotiView>
 
         <MotiText from={{ opacity: 0, translateY: 8 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 760, type: 'timing', duration: 460 }} style={styles.tagline}>
-          RIDE · DELIVER · EARN
+          PICK UP · DELIVER · RECORD
         </MotiText>
       </View>
 
@@ -98,13 +98,13 @@ const styles = StyleSheet.create({
   gridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: '#fff' },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topDot: { width: 6, height: 6, backgroundColor: '#fff' },
-  topMono: { fontFamily: 'SpaceMono_700Bold', fontSize: 10, color: '#fff', letterSpacing: 1.5 },
+  topMono: { fontFamily: 'SpaceMono_700Bold', fontSize: 13, color: '#fff', letterSpacing: 1.5 },
   heroWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   maskRow: { overflow: 'hidden' },
-  letter: { fontFamily: 'Inter_900Black', fontSize: 54, color: '#fff', letterSpacing: -3, lineHeight: 58 },
+  letter: { fontFamily: 'Inter_900Black', fontSize: 54, color: '#fff', letterSpacing: -3, lineHeight: 62 },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 8, marginTop: 18 },
-  badgeText: { fontFamily: 'Inter_900Black', fontSize: 12, color: '#000', letterSpacing: 1 },
-  tagline: { fontFamily: 'SpaceMono_700Bold', fontSize: 11, color: '#fff', letterSpacing: 3, marginTop: 16 },
+  badgeText: { fontFamily: 'Inter_900Black', fontSize: 15, color: '#000', letterSpacing: 1 },
+  tagline: { fontFamily: 'SpaceMono_700Bold', fontSize: 14, color: '#fff', letterSpacing: 3, marginTop: 16 },
   // strip directly above the loading bar (same width as the bar); the scooter
   // emerges from the left edge and rides to the right edge once
   riderTrack: { height: 32, justifyContent: 'flex-end', overflow: 'hidden' },
@@ -113,5 +113,5 @@ const styles = StyleSheet.create({
   barTrack: { height: 3, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden', marginBottom: 12 },
   barFill: { height: 3, backgroundColor: '#fff' },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  metaMono: { fontFamily: 'SpaceMono_700Bold', fontSize: 9, color: '#fff', letterSpacing: 1 },
+  metaMono: { fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: '#fff', letterSpacing: 1 },
 });

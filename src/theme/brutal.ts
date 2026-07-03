@@ -84,16 +84,16 @@ export const HAIRLINE = { borderWidth: 1, get borderColor() { return C.hairline;
 export const T: any = new Proxy({}, {
   get(_, key: string) {
     const map: any = {
-      display: { fontFamily: 'Inter_900Black', fontSize: 36, color: C.ink, letterSpacing: -1.2, lineHeight: 38 },
+      display: { fontFamily: 'Inter_900Black', fontSize: 36, color: C.ink, letterSpacing: -1.2, lineHeight: 42 },
       h1: { fontFamily: 'Inter_900Black', fontSize: 26, color: C.ink, letterSpacing: -0.8 },
-      h2: { fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink, letterSpacing: -0.5 },
-      h3: { fontFamily: 'Inter_700Bold', fontSize: 16, color: C.ink, letterSpacing: -0.2 },
-      body: { fontFamily: 'Inter_400Regular', fontSize: 14, color: C.ink, lineHeight: 19 },
-      bodyB: { fontFamily: 'Inter_700Bold', fontSize: 14, color: C.ink },
-      caption: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.dim },
-      label: { fontFamily: 'Inter_900Black', fontSize: 11, color: C.ink, letterSpacing: 1 },
-      mono: { fontFamily: 'SpaceMono_400Regular', fontSize: 11, color: C.ink, letterSpacing: 0.5 },
-      monoB: { fontFamily: 'SpaceMono_700Bold', fontSize: 11, color: C.ink, letterSpacing: 0.5 },
+      h2: { fontFamily: 'Inter_900Black', fontSize: 22, color: C.ink, letterSpacing: -0.5 },
+      h3: { fontFamily: 'Inter_700Bold', fontSize: 19, color: C.ink, letterSpacing: -0.2 },
+      body: { fontFamily: 'Inter_400Regular', fontSize: 17, color: C.ink, lineHeight: 22 },
+      bodyB: { fontFamily: 'Inter_700Bold', fontSize: 17, color: C.ink },
+      caption: { fontFamily: 'Inter_500Medium', fontSize: 15, color: C.dim },
+      label: { fontFamily: 'Inter_900Black', fontSize: 14, color: C.ink, letterSpacing: 1 },
+      mono: { fontFamily: 'SpaceMono_400Regular', fontSize: 14, color: C.ink, letterSpacing: 0.5 },
+      monoB: { fontFamily: 'SpaceMono_700Bold', fontSize: 14, color: C.ink, letterSpacing: 0.5 },
     };
     return map[key];
   },

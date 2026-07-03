@@ -44,7 +44,7 @@ export function BrutalButton({ label, onPress, variant = 'solid', icon, iconRigh
   const bg = disabled ? C.faint : isSolid ? C.ink : variant === 'ghost' ? 'transparent' : C.white;
   const fg = isSolid ? C.white : C.ink;
   const padV = big ? 18 : small ? SP.s : SP.m;
-  const fontSize = big ? 16 : small ? 12 : 14;
+  const fontSize = big ? 18 : small ? 14 : 16;
   return (
     <Animated.View style={[{ transform: [{ scale }] }, block && { alignSelf: 'stretch' }, style]}>
       <View style={[{ backgroundColor: bg }, variant !== 'ghost' && BORDER(1)]}>
@@ -117,7 +117,7 @@ export function BrutalInput({ value, onChangeText, placeholder, label, secureTex
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           maxLength={maxLength}
-          style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 16, color: C.ink, padding: 0 }}
+          style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 19, color: C.ink, padding: 0 }}
         />
       </View>
     </View>
@@ -126,11 +126,11 @@ export function BrutalInput({ value, onChangeText, placeholder, label, secureTex
 
 // ─── ASCII DIVIDER ─────────────────────────────────────────
 export function AsciiDivider({ faint, style }: { faint?: boolean; style?: TextStyle }) {
-  return <Text numberOfLines={1} style={[{ fontFamily: 'SpaceMono_400Regular', fontSize: 10, color: faint ? C.dim : C.ink }, style]}>{faint ? ASCII.hrFaint : ASCII.hr}</Text>;
+  return <Text numberOfLines={1} style={[{ fontFamily: 'SpaceMono_400Regular', fontSize: 13, color: faint ? C.dim : C.ink }, style]}>{faint ? ASCII.hrFaint : ASCII.hr}</Text>;
 }
 
 export function DottedRule() {
-  return <Text numberOfLines={1} style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 10, color: C.dim }}>{ASCII.hrDot}</Text>;
+  return <Text numberOfLines={1} style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 13, color: C.dim }}>{ASCII.hrDot}</Text>;
 }
 
 // ─── SCREEN HEADER ─────────────────────────────────────────
@@ -139,7 +139,7 @@ export function ScreenHeader({ title, onBack, right }: { title: string; onBack?:
     <View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SP.l, paddingTop: 56, paddingBottom: SP.m, backgroundColor: C.white }}>
         {onBack ? <BrutalIconBtn icon="arrow-left" onPress={onBack} size={40} /> : <View style={{ width: 40 }} />}
-        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: C.ink, letterSpacing: 1 }}>{title.toUpperCase()}</Text>
+        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 19, color: C.ink, letterSpacing: 1 }}>{title.toUpperCase()}</Text>
         {right ?? <View style={{ width: 40 }} />}
       </View>
       <View style={{ height: 1, backgroundColor: C.ink }} />
@@ -153,12 +153,12 @@ export function SectionHead({ title, action, onAction }: { title: string; action
     <View style={{ marginTop: SP.xl, marginBottom: SP.m }}>
       <AsciiDivider />
       <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }}>
-        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink, letterSpacing: -0.5 }}>
+        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 22, color: C.ink, letterSpacing: -0.5 }}>
           {ASCII.caret} {title}
         </Text>
         {action && (
           <Pressable onPress={onAction} hitSlop={8}>
-            <Text style={[T.monoB, { fontSize: 11 }]}>{`[ ${action} ]`}</Text>
+            <Text style={[T.monoB, { fontSize: 14 }]}>{`[ ${action} ]`}</Text>
           </Pressable>
         )}
       </View>
@@ -171,9 +171,9 @@ export function SectionHead({ title, action, onAction }: { title: string; action
 export function StatTile({ label, value, sub, solid, style }: { label: string; value: string; sub?: string; solid?: boolean; style?: ViewStyle }) {
   return (
     <View style={[{ padding: SP.m, backgroundColor: solid ? C.ink : C.white, minWidth: 0 }, BORDER(1), style]}>
-      <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 9, letterSpacing: 1, color: solid ? C.white : C.dim }}>{label.toUpperCase()}</Text>
-      <Text style={{ fontFamily: 'Inter_900Black', fontSize: 24, letterSpacing: -1, color: solid ? C.white : C.ink, marginTop: 4 }}>{value}</Text>
-      {sub && <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: solid ? C.white : C.dim, marginTop: 1 }}>{sub}</Text>}
+      <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, letterSpacing: 1, color: solid ? C.white : C.dim }}>{label.toUpperCase()}</Text>
+      <Text style={{ fontFamily: 'Inter_900Black', fontSize: 26, letterSpacing: -1, color: solid ? C.white : C.ink, marginTop: 4 }}>{value}</Text>
+      {sub && <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: solid ? C.white : C.dim, marginTop: 1 }}>{sub}</Text>}
     </View>
   );
 }
@@ -188,8 +188,8 @@ export function InfoRow({ label, value, icon, onPress }: { label: string; value:
         </View>
       )}
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 9, letterSpacing: 1, color: C.dim }}>{label.toUpperCase()}</Text>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, marginTop: 2 }}>{value}</Text>
+        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, letterSpacing: 1, color: C.dim }}>{label.toUpperCase()}</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.ink, marginTop: 2 }}>{value}</Text>
       </View>
       {onPress && <Feather name="chevron-right" size={20} color={C.ink} />}
     </View>
@@ -232,15 +232,15 @@ export function MapPanel({ height = 200, label = 'LIVE NAVIGATION', from = 'YOU'
         <Feather name="map-pin" size={14} color={C.white} />
       </View>
       <View style={{ position: 'absolute', top: 8, left: 8, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: C.ink }}>
-        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 9, color: C.white, letterSpacing: 1 }}>{label}</Text>
+        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.white, letterSpacing: 1 }}>{label}</Text>
       </View>
       <View style={{ position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', gap: 6 }}>
         <View style={{ paddingHorizontal: 6, paddingVertical: 3, backgroundColor: C.white, borderWidth: 1, borderColor: C.ink }}>
-          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 8, color: C.ink }}>{from}</Text>
+          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 11, color: C.ink }}>{from}</Text>
         </View>
         <Feather name="arrow-right" size={12} color={C.ink} style={{ alignSelf: 'center' }} />
         <View style={{ paddingHorizontal: 6, paddingVertical: 3, backgroundColor: C.ink }}>
-          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 8, color: C.white }}>{to}</Text>
+          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 11, color: C.white }}>{to}</Text>
         </View>
       </View>
     </View>
@@ -309,7 +309,7 @@ export function SwipeToConfirm({ label, onConfirm, icon = 'chevrons-right', disa
       {/* black trail that grows from the left, capped under the knob */}
       <AReanimated style={[{ position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: disabled ? C.faint : C.ink }, fillStyle]} />
       <AReanimated style={[{ position: 'absolute', left: KNOB + PAD, right: SP.m, alignItems: 'center' }, labelStyle]} pointerEvents="none">
-        <Text numberOfLines={1} style={{ fontFamily: 'Inter_900Black', fontSize: 13, color: disabled ? C.dim : C.ink, letterSpacing: 1 }}>{label.toUpperCase()}</Text>
+        <Text numberOfLines={1} style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: disabled ? C.dim : C.ink, letterSpacing: 1 }}>{label.toUpperCase()}</Text>
       </AReanimated>
       <GestureDetector gesture={gesture}>
         <AReanimated style={[{ width: KNOB, height: KNOB, marginLeft: PAD, backgroundColor: disabled ? C.dim : C.ink, alignItems: 'center', justifyContent: 'center' }, knobStyle]}>
@@ -337,8 +337,8 @@ export function BrutalToast({ toast, onHide }: { toast: { title: string; msg?: s
           <Feather name={(toast.icon as any) || 'check'} size={14} color={C.ink} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Inter_900Black', fontSize: 12, color: C.white, letterSpacing: 0.5 }}>{toast.title.toUpperCase()}</Text>
-          {toast.msg && <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 9, color: C.white, opacity: 0.75, marginTop: 1 }} numberOfLines={1}>{toast.msg}</Text>}
+          <Text style={{ fontFamily: 'Inter_900Black', fontSize: 15, color: C.white, letterSpacing: 0.5 }}>{toast.title.toUpperCase()}</Text>
+          {toast.msg && <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 12, color: C.white, opacity: 0.75, marginTop: 1 }} numberOfLines={1}>{toast.msg}</Text>}
         </View>
       </Pressable>
     </Animated.View>
@@ -357,19 +357,19 @@ export function BrutalConfirm({ confirm, onHide }: { confirm: { title: string; m
             <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: C.white }}>
               <Feather name={(confirm.icon as any) || (danger ? 'alert-triangle' : 'info')} size={14} color={C.ink} />
             </View>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 12, color: C.white, letterSpacing: 1, flex: 1 }}>{confirm.title.toUpperCase()}</Text>
+            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 15, color: C.white, letterSpacing: 1, flex: 1 }}>{confirm.title.toUpperCase()}</Text>
           </View>
           {confirm.msg && (
             <View style={{ padding: SP.l }}>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.ink, lineHeight: 20 }}>{confirm.msg}</Text>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 17, color: C.ink, lineHeight: 23 }}>{confirm.msg}</Text>
             </View>
           )}
           <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: C.ink }}>
             <Pressable onPress={onHide} style={{ flex: 1, padding: SP.m, alignItems: 'center', backgroundColor: C.white, borderRightWidth: 1, borderColor: C.ink }}>
-              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 13, color: C.ink, letterSpacing: 0.5 }}>{(confirm.cancelLabel || 'CANCEL').toUpperCase()}</Text>
+              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: C.ink, letterSpacing: 0.5 }}>{(confirm.cancelLabel || 'CANCEL').toUpperCase()}</Text>
             </Pressable>
             <Pressable onPress={() => { confirm.onConfirm?.(); onHide(); }} style={{ flex: 1, padding: SP.m, alignItems: 'center', backgroundColor: C.ink }}>
-              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 13, color: C.white, letterSpacing: 0.5 }}>{(confirm.confirmLabel || (danger ? 'CONFIRM' : 'OK')).toUpperCase()}</Text>
+              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: C.white, letterSpacing: 0.5 }}>{(confirm.confirmLabel || (danger ? 'CONFIRM' : 'OK')).toUpperCase()}</Text>
             </Pressable>
           </View>
         </View>

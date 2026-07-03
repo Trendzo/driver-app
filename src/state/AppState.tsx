@@ -1,64 +1,88 @@
-// Trendzo Partner — global driver state.
-// Far simpler than the shopper app: a rider only ever cares about
-//   1. am I ONLINE or OFFLINE?
-//   2. do I have an active delivery, and what stage is it at?
-//   3. how much have I earned today?
+// Trendzo Delivery (Agent App) — global state.
+//
+// Model the spec exactly:
+//  • The agent is EMPLOYED. No online/offline, no accept/reject. Orders are
+//    ASSIGNED and simply live in `orders`.
+//  • The agent can have MULTIPLE active deliveries at once.
+//  • Each order is a small forward-only state machine. Every transition is a
+//    single function call so it can later be wired to the real backend.
+//  • The agent RECORDS facts (kept/returned/refused + photo, cash collected).
+//    The store DECIDES refunds — never modelled here.
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DeliveryOrder, ORDER_QUEUE, TODAY } from '../data/mockData';
+import {
+  Order, OrderState, DoorDecision, ASSIGNED_ORDERS, AGENT, TODAY,
+} from '../data/mockData';
 import { setNight as applyNight } from '../theme/brutal';
 
 const AUTH_KEY = '@trendzo/phone';
 const ONBOARD_KEY = '@trendzo/onboarded';
 const NIGHT_KEY = '@trendzo/night';
 
-// The delivery lifecycle — a strict forward-only machine. Keeping it linear is
-// what makes the rider UI foolproof: there's always exactly ONE next action.
-export type DeliveryStage =
-  | 'assigned'        // accepted, heading to store
-  | 'at_store'        // arrived at store, collecting items
-  | 'picked_up'       // items collected, heading to customer
-  | 'at_customer'     // arrived at customer, confirming handover
-  | 'delivered';      // done
+// An event written on every status change (agent_id attached automatically).
+export type OrderEvent = { orderId: string; type: string; ts: number; reason?: string; photo?: string };
 
-export const STAGE_ORDER: DeliveryStage[] = ['assigned', 'at_store', 'picked_up', 'at_customer', 'delivered'];
+// Per-order door bookkeeping for Try-and-Buy.
+export type DoorState = {
+  endsAt: number;            // epoch ms when the 30-min countdown ends
+  extensionUsed: boolean;    // the one +5 min has been used
+  decisions: Record<string, DoorDecision>;  // itemId -> decision
+  closed: boolean;
+};
 
 type Toast = { title: string; msg?: string; icon?: string } | null;
 type Confirm = { title: string; msg?: string; confirmLabel?: string; cancelLabel?: string; onConfirm?: () => void; danger?: boolean; icon?: string } | null;
 
+// Active = anything still in the agent's hands (not a terminal state).
+const TERMINAL: OrderState[] = ['delivered', 'returned_to_store'];
+export const isActive = (o: Order) => !TERMINAL.includes(o.state);
+
 type AppCtx = {
-  // auth
   phone: string | null;
   signIn: (phone: string) => void;
   signOut: () => void;
-  // onboarding
   onboarded: boolean;
   setOnboarded: (v: boolean) => void;
-  // duty
-  online: boolean;
-  setOnline: (v: boolean) => void;
-  toggleOnline: () => void;
-  // incoming order request (shown as modal when online & idle)
-  incoming: DeliveryOrder | null;
-  // active delivery
-  activeOrder: DeliveryOrder | null;
-  stage: DeliveryStage;
-  acceptOrder: (o: DeliveryOrder) => void;
-  rejectOrder: () => void;
-  advanceStage: () => void;     // move to the next stage
-  completeDelivery: () => void; // finalize, add earnings, clear
-  // delivery-proof photo captured at the customer's door
+
+  agent: typeof AGENT;
+  orders: Order[];
+  getOrder: (id: string) => Order | undefined;
+
+  // ── forward-delivery transitions (Express / Standard) ──
+  pickUp: (id: string) => void;              // packed -> picked_up (store handover)
+  startDelivery: (id: string) => void;       // picked_up -> out_for_delivery
+  markDelivered: (id: string, opts?: { cod?: number }) => void;  // -> delivered
+  markUndelivered: (id: string, reason: string) => void;          // -> undelivered
+  retryDelivery: (id: string) => void;        // undelivered -> out_for_delivery
+  returnToStore: (id: string) => void;        // -> returning_to_store
+  handedBack: (id: string) => void;           // returning_to_store -> returned_to_store
+  abort: (id: string) => void;                // mid-delivery -> returning_to_store
+
+  // ── reverse pickup ──
+  collectReverse: (id: string) => void;       // out_for_delivery -> returning_to_store
+
+  // ── Try-and-Buy door ──
+  door: Record<string, DoorState>;
+  arriveAtDoor: (id: string) => void;         // out_for_delivery -> at_door, start timer
+  decideItem: (id: string, itemId: string, d: DoorDecision) => void;
+  addExtension: (id: string) => void;
+  closeDoor: (id: string) => void;            // apply close rules -> delivered | returning_to_store
+
+  // ── COD running total ──
+  codCollected: number;
+  depositCash: () => void;
+
+  // ── mandatory-photo capture (camera returns here) ──
   proofPhoto: string | null;
   setProofPhoto: (uri: string | null) => void;
+
+  // counters (read-only)
+  deliveredToday: number;
+
   // theme
   night: boolean;
   toggleNight: () => void;
-  // withdrawable wallet balance (rupees)
-  balance: number;
-  withdraw: (amount: number) => void;
-  // earnings (today) — grows as deliveries complete
-  todayEarnings: number;
-  todayTrips: number;
+
   // toast + confirm
   toast: Toast;
   showToast: (title: string, msg?: string, icon?: string) => void;
@@ -73,21 +97,16 @@ const Ctx = createContext<AppCtx | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [phone, setPhone] = useState<string | null>(null);
   const [onboarded, setOnboardedState] = useState(false);
-  const [online, setOnlineState] = useState(false);
-  const [incoming, setIncoming] = useState<DeliveryOrder | null>(null);
-  const [activeOrder, setActiveOrder] = useState<DeliveryOrder | null>(null);
-  const [stage, setStage] = useState<DeliveryStage>('assigned');
+  const [orders, setOrders] = useState<Order[]>(() => ASSIGNED_ORDERS.map(o => ({ ...o })));
+  const [door, setDoor] = useState<Record<string, DoorState>>({});
+  const [codCollected, setCodCollected] = useState(TODAY.codCollected);
+  const [deliveredToday, setDeliveredToday] = useState(TODAY.delivered);
   const [proofPhoto, setProofPhoto] = useState<string | null>(null);
   const [night, setNightState] = useState(false);
-  const [balance, setBalance] = useState(5642);
-  const [todayEarnings, setTodayEarnings] = useState(TODAY.earnings);
-  const [todayTrips, setTodayTrips] = useState(TODAY.trips);
   const [toast, setToast] = useState<Toast>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
-
-  const queueIdx = useRef(0);
+  const events = useRef<OrderEvent[]>([]);
   const toastTimer = useRef<any>(null);
-  const requestTimer = useRef<any>(null);
 
   // ── hydrate persisted auth / onboarding / theme ──
   useEffect(() => {
@@ -99,38 +118,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => {});
   }, []);
 
-  const toggleNight = useCallback(() => {
-    setNightState(n => {
-      const next = !n;
-      applyNight(next);
-      AsyncStorage.setItem(NIGHT_KEY, next ? '1' : '0').catch(() => {});
-      return next;
-    });
-  }, []);
-
-  const withdraw = useCallback((amount: number) => {
-    setBalance(b => Math.max(0, b - amount));
-  }, []);
-
-  const signIn = useCallback((p: string) => {
-    setPhone(p);
-    AsyncStorage.setItem(AUTH_KEY, p).catch(() => {});
-  }, []);
-  const signOut = useCallback(() => {
-    setPhone(null);
-    setOnlineState(false);
-    setActiveOrder(null);
-    setIncoming(null);
-    AsyncStorage.removeItem(AUTH_KEY).catch(() => {});
-  }, []);
-
-  const setOnboarded = useCallback((v: boolean) => {
-    setOnboardedState(v);
-    AsyncStorage.setItem(ONBOARD_KEY, v ? '1' : '0').catch(() => {});
-  }, []);
-
-  // ── duty: going online schedules a fake incoming order so the demo is
-  //    immediately alive. Going offline clears any pending request. ──
   const showToast = useCallback((title: string, msg?: string, icon?: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ title, msg, icon });
@@ -141,77 +128,142 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setToast(null);
   }, []);
 
-  const scheduleIncoming = useCallback(() => {
-    if (requestTimer.current) clearTimeout(requestTimer.current);
-    requestTimer.current = setTimeout(() => {
-      // only ping if still online and not already busy
-      setOnlineState(on => {
-        setActiveOrder(active => {
-          setIncoming(inc => {
-            if (on && !active && !inc) {
-              const next = ORDER_QUEUE[queueIdx.current % ORDER_QUEUE.length];
-              return next;
-            }
-            return inc;
-          });
-          return active;
-        });
-        return on;
-      });
-    }, 2600);
+  const logEvent = useCallback((orderId: string, type: string, reason?: string, photo?: string) => {
+    events.current.push({ orderId, type, ts: Date.now(), reason, photo });
   }, []);
 
-  const setOnline = useCallback((v: boolean) => {
-    setOnlineState(v);
-    if (v) {
-      showToast('You are online', 'Looking for orders near you', 'zap');
-      scheduleIncoming();
-    } else {
-      setIncoming(null);
-      if (requestTimer.current) clearTimeout(requestTimer.current);
-      showToast('You are offline', 'You will not receive orders', 'moon');
+  // helper: mutate one order's state
+  const setOrderState = useCallback((id: string, state: OrderState) => {
+    setOrders(prev => prev.map(o => (o.id === id ? { ...o, state } : o)));
+  }, []);
+
+  const toggleNight = useCallback(() => {
+    setNightState(n => {
+      const next = !n;
+      applyNight(next);
+      AsyncStorage.setItem(NIGHT_KEY, next ? '1' : '0').catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const signIn = useCallback((p: string) => { setPhone(p); AsyncStorage.setItem(AUTH_KEY, p).catch(() => {}); }, []);
+  const signOut = useCallback(() => { setPhone(null); AsyncStorage.removeItem(AUTH_KEY).catch(() => {}); }, []);
+  const setOnboarded = useCallback((v: boolean) => {
+    setOnboardedState(v);
+    AsyncStorage.setItem(ONBOARD_KEY, v ? '1' : '0').catch(() => {});
+  }, []);
+
+  const getOrder = useCallback((id: string) => orders.find(o => o.id === id), [orders]);
+
+  // ── forward transitions ──
+  const pickUp = useCallback((id: string) => {
+    setOrderState(id, 'picked_up'); logEvent(id, 'picked_up');
+    showToast('Picked up', 'Bag collected from store', 'shopping-bag');
+  }, [setOrderState, logEvent, showToast]);
+
+  const startDelivery = useCallback((id: string) => {
+    setOrderState(id, 'out_for_delivery'); logEvent(id, 'out_for_delivery');
+    showToast('Out for delivery', 'Navigate to the customer', 'navigation');
+  }, [setOrderState, logEvent, showToast]);
+
+  const markDelivered = useCallback((id: string, opts?: { cod?: number }) => {
+    setOrderState(id, 'delivered');
+    logEvent(id, 'delivered');
+    setDeliveredToday(n => n + 1);
+    if (opts?.cod && opts.cod > 0) {
+      setCodCollected(c => c + opts.cod!);
+      logEvent(id, 'cod_collected', `₹${opts.cod}`);
     }
-  }, [showToast, scheduleIncoming]);
-
-  const toggleOnline = useCallback(() => setOnline(!online), [online, setOnline]);
-
-  // ── order accept / reject ──
-  const acceptOrder = useCallback((o: DeliveryOrder) => {
-    setIncoming(null);
-    setActiveOrder(o);
-    setStage('assigned');
     setProofPhoto(null);
-    queueIdx.current += 1;
-    showToast('Order accepted', `Head to ${o.store.name}`, 'check');
+    showToast('Delivered', 'Order closed successfully', 'check-circle');
+  }, [setOrderState, logEvent, showToast]);
+
+  const markUndelivered = useCallback((id: string, reason: string) => {
+    setOrderState(id, 'undelivered'); logEvent(id, 'undelivered', reason);
+    setProofPhoto(null);
+    showToast("Couldn't deliver", 'Customer notified · 1 retry left', 'alert-triangle');
+  }, [setOrderState, logEvent, showToast]);
+
+  const retryDelivery = useCallback((id: string) => {
+    setOrderState(id, 'out_for_delivery'); logEvent(id, 'retry');
+    showToast('Retrying delivery', 'One more attempt', 'rotate-ccw');
+  }, [setOrderState, logEvent, showToast]);
+
+  const returnToStore = useCallback((id: string) => {
+    setOrderState(id, 'returning_to_store'); logEvent(id, 'returning_to_store');
+    showToast('Returning to store', 'Reach the store within 30 min', 'corner-up-left');
+  }, [setOrderState, logEvent, showToast]);
+
+  const handedBack = useCallback((id: string) => {
+    setOrderState(id, 'returned_to_store'); logEvent(id, 'returned_to_store');
+    showToast('Handed back to store', 'All items acknowledged', 'check-circle');
+  }, [setOrderState, logEvent, showToast]);
+
+  const abort = useCallback((id: string) => {
+    setOrderState(id, 'returning_to_store'); logEvent(id, 'aborted');
+    showToast('Delivery aborted', 'Bring the bag back to the store', 'x-octagon');
+  }, [setOrderState, logEvent, showToast]);
+
+  const collectReverse = useCallback((id: string) => {
+    setOrderState(id, 'returning_to_store'); logEvent(id, 'reverse_collected');
+    setProofPhoto(null);
+    showToast('Item collected', 'Bring it to the store', 'package');
+  }, [setOrderState, logEvent, showToast]);
+
+  // ── Try-and-Buy door ──
+  const arriveAtDoor = useCallback((id: string) => {
+    setOrderState(id, 'at_door'); logEvent(id, 'at_door');
+    setDoor(prev => {
+      if (prev[id]) return prev;  // keep an existing timer if re-entering
+      const order = orders.find(o => o.id === id);
+      const decisions: Record<string, DoorDecision> = {};
+      order?.items.forEach(it => { decisions[it.id] = 'pending'; });
+      return { ...prev, [id]: { endsAt: Date.now() + 30 * 60 * 1000, extensionUsed: false, decisions, closed: false } };
+    });
+  }, [orders, setOrderState, logEvent]);
+
+  const decideItem = useCallback((id: string, itemId: string, d: DoorDecision) => {
+    setDoor(prev => {
+      const st = prev[id]; if (!st) return prev;
+      return { ...prev, [id]: { ...st, decisions: { ...st.decisions, [itemId]: d } } };
+    });
+    logEvent(id, `item_${d}`, itemId);
+  }, [logEvent]);
+
+  const addExtension = useCallback((id: string) => {
+    setDoor(prev => {
+      const st = prev[id]; if (!st || st.extensionUsed) return prev;
+      return { ...prev, [id]: { ...st, endsAt: st.endsAt + 5 * 60 * 1000, extensionUsed: true } };
+    });
+    showToast('+5 minutes added', 'One extension used', 'clock');
   }, [showToast]);
 
-  const rejectOrder = useCallback(() => {
-    setIncoming(null);
-    queueIdx.current += 1;
-    showToast('Order passed', 'Finding you another order', 'x');
-    scheduleIncoming();
-  }, [showToast, scheduleIncoming]);
+  const closeDoor = useCallback((id: string) => {
+    const order = orders.find(o => o.id === id);
+    const st = door[id];
+    if (!order || !st) return;
+    // Undecided items default to KEPT.
+    const decisions = { ...st.decisions };
+    order.items.forEach(it => { if (decisions[it.id] === 'pending') decisions[it.id] = 'kept'; });
+    setDoor(prev => ({ ...prev, [id]: { ...prev[id], decisions, closed: true } }));
+    // Returned / store_decides ride back; refused / kept stay with the customer.
+    const ridingBack = order.items.filter(it => ['returned', 'store_decides'].includes(decisions[it.id]));
+    const allReturned = ridingBack.length === order.items.length;
+    if (allReturned) {
+      setOrderState(id, 'returning_to_store'); logEvent(id, 'door_full_reject');
+      showToast('Full return', 'Bring the bag back to the store', 'corner-up-left');
+    } else {
+      setOrderState(id, 'delivered'); logEvent(id, 'door_delivered');
+      setDeliveredToday(n => n + 1);
+      showToast('Door closed', 'Kept items locked in · delivered', 'check-circle');
+    }
+  }, [orders, door, setOrderState, logEvent, showToast]);
 
-  const advanceStage = useCallback(() => {
-    setStage(s => {
-      const i = STAGE_ORDER.indexOf(s);
-      return STAGE_ORDER[Math.min(STAGE_ORDER.length - 1, i + 1)];
-    });
-  }, []);
-
-  const completeDelivery = useCallback(() => {
-    setActiveOrder(o => {
-      if (o) {
-        setTodayEarnings(e => e + o.payout + o.tip);
-        setTodayTrips(t => t + 1);
-      }
-      return null;
-    });
-    setStage('assigned');
-    setProofPhoto(null);
-    showToast('Delivery complete', 'Earnings added to today', 'check-circle');
-    scheduleIncoming();
-  }, [showToast, scheduleIncoming]);
+  const depositCash = useCallback(() => {
+    setCodCollected(0);
+    logEvent('—', 'cash_deposited');
+    showToast('Cash deposited', 'Reconciled with ops', 'check-circle');
+  }, [logEvent, showToast]);
 
   const showConfirm = useCallback((c: NonNullable<Confirm>) => setConfirm(c), []);
   const hideConfirm = useCallback(() => setConfirm(null), []);
@@ -219,16 +271,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AppCtx>(() => ({
     phone, signIn, signOut,
     onboarded, setOnboarded,
-    online, setOnline, toggleOnline,
-    incoming, activeOrder, stage,
-    acceptOrder, rejectOrder, advanceStage, completeDelivery,
+    agent: AGENT, orders, getOrder,
+    pickUp, startDelivery, markDelivered, markUndelivered, retryDelivery,
+    returnToStore, handedBack, abort, collectReverse,
+    door, arriveAtDoor, decideItem, addExtension, closeDoor,
+    codCollected, depositCash,
     proofPhoto, setProofPhoto,
+    deliveredToday,
     night, toggleNight,
-    balance, withdraw,
-    todayEarnings, todayTrips,
     toast, showToast, hideToast,
     confirm, showConfirm, hideConfirm,
-  }), [phone, signIn, signOut, onboarded, setOnboarded, online, setOnline, toggleOnline, incoming, activeOrder, stage, acceptOrder, rejectOrder, advanceStage, completeDelivery, proofPhoto, night, toggleNight, balance, withdraw, todayEarnings, todayTrips, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
+  }), [phone, signIn, signOut, onboarded, setOnboarded, orders, getOrder, pickUp, startDelivery, markDelivered, markUndelivered, retryDelivery, returnToStore, handedBack, abort, collectReverse, door, arriveAtDoor, decideItem, addExtension, closeDoor, codCollected, depositCash, proofPhoto, deliveredToday, night, toggleNight, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

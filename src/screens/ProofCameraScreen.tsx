@@ -4,7 +4,7 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { C, SP, BORDER } from '../theme/brutal';
@@ -14,6 +14,10 @@ import { useApp } from '../state/AppState';
 export default function ProofCameraScreen() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation<any>();
+  const route = useRoute<any>();
+  // Caller passes what the photo is FOR — drives the on-screen guidance.
+  const title: string = route.params?.title ?? 'Delivery proof';
+  const hint: string = route.params?.hint ?? 'Show the order at the doorstep';
   const { setProofPhoto, showToast } = useApp();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
@@ -50,7 +54,7 @@ export default function ProofCameraScreen() {
           <Feather name="camera" size={40} color={C.white} />
         </View>
         <Text style={{ fontFamily: 'Inter_900Black', fontSize: 26, color: C.ink, marginTop: SP.l, textAlign: 'center', letterSpacing: -0.5 }}>CAMERA ACCESS</Text>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginTop: 8, textAlign: 'center', lineHeight: 21 }}>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 18, color: C.dim, marginTop: 8, textAlign: 'center', lineHeight: 24 }}>
           Trendzo needs your camera to take a delivery-proof photo at the customer's door.
         </Text>
         <View style={{ width: '100%', marginTop: SP.xl, gap: 10 }}>
@@ -72,7 +76,7 @@ export default function ProofCameraScreen() {
           <Feather name="x" size={20} color={C.ink} />
         </Pressable>
         <View style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: C.white, borderWidth: 1, borderColor: C.ink }}>
-          <Text style={{ fontFamily: 'Inter_900Black', fontSize: 11, color: C.ink, letterSpacing: 1 }}>DELIVERY PROOF</Text>
+          <Text style={{ fontFamily: 'Inter_900Black', fontSize: 14, color: C.ink, letterSpacing: 1 }}>{title.toUpperCase()}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -81,7 +85,7 @@ export default function ProofCameraScreen() {
       <View pointerEvents="none" style={{ position: 'absolute', top: '28%', left: '12%', right: '12%', bottom: '30%', borderWidth: 2, borderColor: 'rgba(255,255,255,0.8)' }} />
       <View pointerEvents="none" style={{ position: 'absolute', top: '22%', left: 0, right: 0, alignItems: 'center' }}>
         <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(0,0,0,0.6)' }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: '#fff' }}>Show the order at the doorstep</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: '#fff' }}>{hint}</Text>
         </View>
       </View>
 
@@ -90,7 +94,7 @@ export default function ProofCameraScreen() {
         <Pressable onPress={capture} disabled={busy} style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' }}>
           <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: busy ? C.faint : '#fff' }} />
         </Pressable>
-        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 10, color: '#fff', letterSpacing: 1, marginTop: 12 }}>{busy ? 'SAVING…' : 'TAP TO CAPTURE'}</Text>
+        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 13, color: '#fff', letterSpacing: 1, marginTop: 12 }}>{busy ? 'SAVING…' : 'TAP TO CAPTURE'}</Text>
       </View>
     </View>
   );

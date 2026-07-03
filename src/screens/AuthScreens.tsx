@@ -55,8 +55,8 @@ export default function AuthScreen() {
               <Feather name="truck" size={22} color={C.white} />
             </View>
             <View>
-              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 18, color: C.ink, letterSpacing: -0.5 }}>TRENDZO</Text>
-              <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 9, color: C.dim, letterSpacing: 1.5 }}>DELIVERY PARTNER</Text>
+              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink, letterSpacing: -0.5 }}>TRENDZO</Text>
+              <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.dim, letterSpacing: 1.5 }}>DELIVERY AGENT</Text>
             </View>
           </View>
 
@@ -64,13 +64,13 @@ export default function AuthScreen() {
 
           {step === 'phone' ? (
             <MotiView from={{ opacity: 0, translateX: -16 }} animate={{ opacity: 1, translateX: 0 }} transition={{ type: 'timing', duration: 240 }} key="phone">
-              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 40, letterSpacing: -1.5, lineHeight: 42, color: C.ink, marginTop: SP.xl }}>LOG IN TO{'\n'}START EARNING</Text>
-              <Text style={[T.body, { color: C.dim, marginTop: 10, fontSize: 15 }]}>Enter your mobile number. We'll send a one-time code.</Text>
+              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 40, letterSpacing: -1.5, lineHeight: 46, color: C.ink, marginTop: SP.xl }}>LOG IN TO{'\n'}START EARNING</Text>
+              <Text style={[T.body, { color: C.dim, marginTop: 10, fontSize: 18 }]}>Enter your mobile number. We'll send a one-time code.</Text>
 
               <Text style={[T.label, { marginTop: SP.xxl, marginBottom: 6 }]}>{'> MOBILE NUMBER'}</Text>
               <View style={[{ flexDirection: 'row', alignItems: 'center' }, BORDER(1)]}>
                 <View style={{ paddingHorizontal: SP.m, paddingVertical: 18, borderRightWidth: 1, borderColor: C.ink, backgroundColor: C.mute }}>
-                  <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: C.ink }}>+91</Text>
+                  <Text style={{ fontFamily: 'Inter_900Black', fontSize: 19, color: C.ink }}>+91</Text>
                 </View>
                 <TextInput
                   value={phone}
@@ -78,7 +78,7 @@ export default function AuthScreen() {
                   placeholder="00000 00000"
                   placeholderTextColor={C.faint}
                   keyboardType="number-pad"
-                  style={{ flex: 1, fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink, paddingHorizontal: SP.m, letterSpacing: 1 }}
+                  style={{ flex: 1, fontFamily: 'Inter_900Black', fontSize: 22, color: C.ink, paddingHorizontal: SP.m, letterSpacing: 1 }}
                 />
               </View>
 
@@ -87,10 +87,10 @@ export default function AuthScreen() {
           ) : (
             <MotiView from={{ opacity: 0, translateX: 16 }} animate={{ opacity: 1, translateX: 0 }} transition={{ type: 'timing', duration: 240 }} key="otp">
               <Pressable onPress={() => setStep('phone')} hitSlop={8} style={{ marginTop: SP.l }}>
-                <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 11, color: C.ink, letterSpacing: 1 }}>{'[ ◀ CHANGE NUMBER ]'}</Text>
+                <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 14, color: C.ink, letterSpacing: 1 }}>{'[ ◀ CHANGE NUMBER ]'}</Text>
               </Pressable>
-              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 40, letterSpacing: -1.5, lineHeight: 42, color: C.ink, marginTop: SP.l }}>ENTER{'\n'}THE CODE</Text>
-              <Text style={[T.body, { color: C.dim, marginTop: 10, fontSize: 15 }]}>Sent to <Text style={{ fontFamily: 'Inter_700Bold', color: C.ink }}>+91 {phone}</Text></Text>
+              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 40, letterSpacing: -1.5, lineHeight: 46, color: C.ink, marginTop: SP.l }}>ENTER{'\n'}THE CODE</Text>
+              <Text style={[T.body, { color: C.dim, marginTop: 10, fontSize: 18 }]}>Sent to <Text style={{ fontFamily: 'Inter_700Bold', color: C.ink }}>+91 {phone}</Text></Text>
 
               <View style={{ flexDirection: 'row', gap: 12, marginTop: SP.xxl }}>
                 {otp.map((d, i) => (
@@ -109,18 +109,18 @@ export default function AuthScreen() {
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: SP.l }}>
                 <Feather name="info" size={13} color={C.dim} />
-                <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 11, color: C.dim, letterSpacing: 0.5 }}>DEMO OTP IS {DEMO_OTP} · OR ANY 4 DIGITS</Text>
+                <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 14, color: C.dim, letterSpacing: 0.5 }}>DEMO OTP IS {DEMO_OTP} · OR ANY 4 DIGITS</Text>
               </View>
 
               <BrutalButton label="Verify & continue" iconRight="check" onPress={verify} block big style={{ marginTop: SP.xl }} />
               <Pressable onPress={() => showToast('OTP resent', `New code sent to +91 ${phone}`, 'refresh-cw')} style={{ marginTop: SP.l, alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: C.ink, textDecorationLine: 'underline' }}>Resend code</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: C.ink, textDecorationLine: 'underline' }}>Resend code</Text>
               </Pressable>
             </MotiView>
           )}
 
           <View style={{ flex: 1 }} />
-          <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 9, color: C.dim, textAlign: 'center', marginTop: SP.xxl, letterSpacing: 1 }}>
+          <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 12, color: C.dim, textAlign: 'center', marginTop: SP.xxl, letterSpacing: 1 }}>
             BY CONTINUING YOU ACCEPT PARTNER TERMS · PRIVACY
           </Text>
         </ScrollView>
