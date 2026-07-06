@@ -38,7 +38,7 @@ function DeliveryCard({ o }: { o: Order }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SP.m, gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
           <MethodBadge method={o.method} />
-          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
         </View>
         {o.state === 'at_door' && doorState ? <Countdown endsAt={doorState.endsAt} /> : <TargetChip minutes={o.targetMin} />}
       </View>
@@ -46,14 +46,14 @@ function DeliveryCard({ o }: { o: Order }) {
 
       {/* customer + status */}
       <View style={{ paddingHorizontal: SP.m, paddingTop: SP.m }}>
-        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink, letterSpacing: -0.4 }}>{o.customer.name}</Text>
-        <Text numberOfLines={1} style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginTop: 1 }}>{o.customer.addr}</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.ink, letterSpacing: -0.3 }}>{o.customer.name}</Text>
+        <Text numberOfLines={1} style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.dim, marginTop: 2 }}>{o.customer.addr}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
-          <View style={{ width: 7, height: 7, backgroundColor: C.ink }} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, letterSpacing: 0.3 }}>{STATE_LABEL[o.state].toUpperCase()}</Text>
+          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.ink }} />
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>{STATE_LABEL[o.state]}</Text>
           {o.payment === 'COD' && (
-            <View style={[{ marginLeft: 'auto', paddingHorizontal: 6, paddingVertical: 2, backgroundColor: C.ink }]}>
-              <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.white }}>COD ₹{o.codAmount}</Text>
+            <View style={{ marginLeft: 'auto', paddingHorizontal: 9, paddingVertical: 3, backgroundColor: C.ink, borderRadius: 999 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.white }}>COD ₹{o.codAmount}</Text>
             </View>
           )}
         </View>
@@ -68,7 +68,7 @@ function DeliveryCard({ o }: { o: Order }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: SP.m, marginTop: SP.s, borderTopWidth: 1, borderColor: C.hairline }}>
         <Feather name="arrow-right-circle" size={16} color={C.ink} />
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, flex: 1 }}>{nextAction(o)}</Text>
-        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 14, color: C.ink, letterSpacing: 0.5 }}>CONTINUE →</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.ink, letterSpacing: 0.5 }}>CONTINUE →</Text>
       </View>
     </Pressable>
   );
@@ -83,34 +83,30 @@ export default function DeliveriesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <BrutalStatusBar />
-      {/* compact header */}
-      <View style={{ paddingTop: insets.top + 10, paddingHorizontal: SP.l, paddingBottom: SP.m, backgroundColor: C.white }}>
+      {/* header */}
+      <View style={{ paddingTop: insets.top + 12, paddingHorizontal: SP.l, paddingBottom: SP.s }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 24, color: C.ink, letterSpacing: -0.8 }}>DELIVERIES</Text>
-            <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 13, color: C.dim, marginTop: 1 }}>{agent.zone} · {agent.shift}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: C.ink, letterSpacing: -0.5 }}>Deliveries</Text>
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, marginTop: 2 }}>{agent.zone} · {agent.shift}</Text>
           </View>
-          <View style={[{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: C.ink }]}>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.white }}>{active.length}</Text>
-            <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 10, color: C.white, letterSpacing: 1 }}>ACTIVE</Text>
+          <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: C.ink, borderRadius: 999, alignItems: 'center' }}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.white }}>{active.length}</Text>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 9, color: 'rgba(255,255,255,0.7)', letterSpacing: 0.8 }}>ACTIVE</Text>
           </View>
         </View>
       </View>
-      <View style={{ height: 1, backgroundColor: C.ink }} />
 
       <ScrollView contentContainerStyle={{ padding: SP.l, paddingBottom: insets.bottom + 90 }} showsVerticalScrollIndicator={false}>
         {active.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 80 }}>
             <Feather name="check-circle" size={44} color={C.faint} />
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 19, color: C.ink, marginTop: 16 }}>ALL CLEAR</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 19, color: C.ink, marginTop: 16 }}>All clear</Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginTop: 4, textAlign: 'center' }}>No active deliveries right now.{'\n'}New orders for your zone appear here.</Text>
           </View>
         ) : (
           <>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SP.m }}>
-              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: C.ink, letterSpacing: 0.5 }}>{ASCII.caret} ACTIVE NOW</Text>
-              <View style={{ flex: 1 }}><AsciiDivider faint /></View>
-            </View>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: SP.m }}>Active now</Text>
             {active.map(o => <DeliveryCard key={o.id} o={o} />)}
           </>
         )}

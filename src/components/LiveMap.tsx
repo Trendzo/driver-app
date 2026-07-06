@@ -88,15 +88,15 @@ export function LiveMap({ origin, destination, height = 200, label = 'LIVE NAVIG
 
         {/* brutalist label overlay */}
         <View style={{ position: 'absolute', top: 8, left: 8, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: C.ink }}>
-          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.white, letterSpacing: 1 }}>{label}</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: C.white, letterSpacing: 1 }}>{label}</Text>
         </View>
         <View style={{ position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', gap: 6 }}>
           <View style={{ paddingHorizontal: 6, paddingVertical: 3, backgroundColor: C.white, borderWidth: 1, borderColor: C.ink }}>
-            <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 11, color: C.ink }}>YOU</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: C.ink }}>YOU</Text>
           </View>
           <Feather name="arrow-right" size={12} color={C.ink} style={{ alignSelf: 'center' }} />
           <View style={{ paddingHorizontal: 6, paddingVertical: 3, backgroundColor: C.ink }}>
-            <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 11, color: C.white }}>{toTag}</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: C.white }}>{toTag}</Text>
           </View>
         </View>
       </View>

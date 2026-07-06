@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, BackHandler, ToastAndroid, LayoutChangeEvent } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, BackHandler, ToastAndroid } from 'react-native';
 import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence } from 'react-native-reanimated';
 import { C } from '../theme/brutal';
 import { BrutalToast, BrutalConfirm } from '../components/Brutal';
 import { useApp, isActive } from '../state/AppState';
@@ -13,6 +12,7 @@ import { useApp, isActive } from '../state/AppState';
 import SplashScreen from '../screens/SplashScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import AuthScreen from '../screens/AuthScreens';
+import HomeScreen from '../screens/HomeScreen';
 import DeliveriesScreen from '../screens/DeliveriesScreen';
 import ReturnsScreen from '../screens/ReturnsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -24,55 +24,37 @@ import ProofCameraScreen from '../screens/ProofCameraScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ─── COMPACT TAB BAR — 3 tabs, sliding blob indicator (matches consumer app) ──
+// ─── FLOATING PILL TAB BAR — 3 tabs, sliding indicator (mockup style) ──
 function PartnerTabBar({ state, navigation }: BottomTabBarProps) {
   const items: { name: string; label: string; icon: any }[] = [
-    { name: 'DeliveriesTab', label: 'DELIVERIES', icon: 'package' },
-    { name: 'ReturnsTab', label: 'RETURNS', icon: 'corner-up-left' },
-    { name: 'ProfileTab', label: 'PROFILE', icon: 'user' },
+    { name: 'HomeTab', label: 'Home', icon: 'home' },
+    { name: 'DeliveriesTab', label: 'Deliveries', icon: 'package' },
+    { name: 'ReturnsTab', label: 'Returns', icon: 'corner-up-left' },
+    { name: 'ProfileTab', label: 'Profile', icon: 'user' },
   ];
   const insets = useSafeAreaInsets();
   const { orders } = useApp();
-  // count of in-progress forward deliveries (badge on the Deliveries tab)
   const activeCount = orders.filter(o => o.method !== 'REVERSE_PICKUP' && isActive(o)).length;
   const returnCount = orders.filter(o => (o.method === 'REVERSE_PICKUP' && isActive(o)) || o.state === 'returning_to_store').length;
 
-  const PILL_W = 60, PILL_H = 44, H_PAD = 6;
-  const [innerW, setInnerW] = useState(0);
-  const itemW = innerW > 0 ? (innerW - H_PAD * 2) / items.length : 0;
-  const tx = useSharedValue(0);
-  const sx = useSharedValue(1);
-
-  useEffect(() => {
-    if (!itemW) return;
-    const target = H_PAD + itemW * state.index + (itemW - PILL_W) / 2;
-    sx.value = withSequence(withTiming(1.6, { duration: 140 }), withSpring(1, { damping: 12, stiffness: 180 }));
-    tx.value = withSpring(target, { damping: 15, stiffness: 130 });
-  }, [state.index, itemW]);
-
-  const blobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }, { scaleX: sx.value }] }));
-
   return (
-    <View style={[styles.wrap, { backgroundColor: C.white, paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}>
-      <View style={{ height: 1, backgroundColor: C.ink }} />
-      <View style={styles.inner} onLayout={(e: LayoutChangeEvent) => setInnerW(e.nativeEvent.layout.width)}>
-        {innerW > 0 && (
-          <Animated.View pointerEvents="none" style={[styles.blob, { width: PILL_W, height: PILL_H, backgroundColor: C.ink }, blobStyle]} />
-        )}
+    <View pointerEvents="box-none" style={[styles.wrap, { paddingBottom: (insets.bottom > 0 ? insets.bottom : 10) + 8 }]}>
+      <View style={styles.bar}>
         {items.map((it, i) => {
           const active = state.index === i;
+          const tint = active ? C.ink : C.faint;
           const badge = it.name === 'DeliveriesTab' ? activeCount : it.name === 'ReturnsTab' ? returnCount : 0;
           return (
             <Pressable key={it.name} onPress={() => navigation.navigate(it.name)} style={styles.btn}>
               <View style={styles.iconWrap}>
-                <Feather name={it.icon} size={20} color={active ? C.white : C.ink} />
+                <Feather name={it.icon} size={20} color={tint} />
                 {badge > 0 && (
-                  <View style={[styles.badge, { backgroundColor: active ? C.white : C.ink, borderColor: active ? C.ink : C.white }]}>
-                    <Text style={{ color: active ? C.ink : C.white, fontFamily: 'Inter_900Black', fontSize: 11 }}>{badge}</Text>
+                  <View style={styles.badge}>
+                    <Text style={{ color: C.white, fontFamily: 'Inter_700Bold', fontSize: 10 }}>{badge}</Text>
                   </View>
                 )}
               </View>
-              <Text style={[styles.lbl, { color: active ? C.white : C.dim, fontFamily: active ? 'Inter_900Black' : 'SpaceMono_700Bold' }]}>{it.label}</Text>
+              <Text style={[styles.lbl, { color: tint }]}>{it.label}</Text>
             </Pressable>
           );
         })}
@@ -82,18 +64,30 @@ function PartnerTabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
-  inner: { flexDirection: 'row', paddingTop: 8, paddingHorizontal: 6, position: 'relative' },
-  blob: { position: 'absolute', top: 4, left: 0 },
+  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' },
+  bar: {
+    flexDirection: 'row',
+    backgroundColor: C.white,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    minWidth: '90%',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
   btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, gap: 3 },
-  iconWrap: { width: 36, height: 30, alignItems: 'center', justifyContent: 'center' },
-  lbl: { fontSize: 11, letterSpacing: 0.5 },
-  badge: { position: 'absolute', top: -2, right: 2, minWidth: 14, height: 14, paddingHorizontal: 2, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  iconWrap: { width: 36, height: 24, alignItems: 'center', justifyContent: 'center' },
+  lbl: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  badge: { position: 'absolute', top: -4, right: 0, minWidth: 15, height: 15, borderRadius: 8, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink },
 });
 
 function MainTabs() {
   return (
     <Tab.Navigator tabBar={(props) => <PartnerTabBar {...props} />} screenOptions={{ headerShown: false }} backBehavior="initialRoute">
+      <Tab.Screen name="HomeTab" component={HomeScreen} />
       <Tab.Screen name="DeliveriesTab" component={DeliveriesScreen} />
       <Tab.Screen name="ReturnsTab" component={ReturnsScreen} />
       <Tab.Screen name="ProfileTab" component={ProfileScreen} />

@@ -14,10 +14,10 @@ import { useApp } from '../state/AppState';
 import { DoorDecision, RETURN_INSPECT_REASONS } from '../data/mockData';
 
 const DECISION_CHIP: Record<Exclude<DoorDecision, 'pending'>, { label: string; solid: boolean }> = {
-  kept: { label: 'KEPT', solid: false },
-  returned: { label: 'RETURNED · IN BAG', solid: true },
-  refused: { label: 'REFUSED · STAYS', solid: false },
-  store_decides: { label: 'IN BAG · STORE DECIDES', solid: true },
+  kept: { label: 'Kept', solid: false },
+  returned: { label: 'Returned · in bag', solid: true },
+  refused: { label: 'Refused · stays', solid: false },
+  store_decides: { label: 'In bag · store decides', solid: true },
 };
 
 export default function DoorScreen() {
@@ -74,23 +74,22 @@ export default function DoorScreen() {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <BrutalStatusBar />
       {/* timer header */}
-      <View style={{ paddingTop: insets.top + 10, paddingHorizontal: SP.l, paddingBottom: SP.m, backgroundColor: C.white }}>
+      <View style={{ paddingTop: insets.top + 12, paddingHorizontal: SP.l, paddingBottom: SP.m }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 22, color: C.ink, letterSpacing: -0.6 }}>AT THE DOOR</Text>
-            <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 13, color: C.dim }}>{o.customer.name} · Try & Buy</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: C.ink, letterSpacing: -0.5 }}>At the door</Text>
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim }}>{o.customer.name} · Try & Buy</Text>
           </View>
           <Countdown endsAt={st.endsAt} big />
         </View>
         <View style={{ flexDirection: 'row', gap: SP.s, marginTop: SP.m }}>
-          <View style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, padding: SP.s, backgroundColor: C.mute }, BORDER(1)]}>
+          <View style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, padding: SP.s + 2, backgroundColor: C.mute }, BORDER(1)]}>
             <Feather name="alert-circle" size={13} color={C.ink} />
-            <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.ink, flex: 1 }}>PREPAID · NEVER COLLECT CASH</Text>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.ink, flex: 1 }}>Prepaid · never collect cash</Text>
           </View>
           <BrutalButton label={st.extensionUsed ? '+5 used' : '+5 min'} variant="outline" small icon="clock" disabled={st.extensionUsed} onPress={() => addExtension(id)} />
         </View>
       </View>
-      <View style={{ height: 1, backgroundColor: C.ink }} />
 
       <ScrollView contentContainerStyle={{ padding: SP.l, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginBottom: SP.m }}>
@@ -100,10 +99,10 @@ export default function DoorScreen() {
         {o.items.map(it => {
           const d = decided(it.id);
           return (
-            <View key={it.id} style={[{ marginBottom: SP.m, backgroundColor: C.white }, BORDER(1)]}>
+            <View key={it.id} style={[{ marginBottom: SP.m, backgroundColor: C.white, overflow: 'hidden' }, BORDER(1)]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: SP.m }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.ink }}>{it.name}</Text>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: C.ink }}>{it.name}</Text>
                   {it.note && <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.dim, marginTop: 1 }}>{it.note}</Text>}
                 </View>
                 <PolicyBadge policy={it.policy} />
@@ -111,20 +110,20 @@ export default function DoorScreen() {
               <View style={{ height: 1, backgroundColor: C.hairline }} />
               {d === 'pending' ? (
                 <View style={{ flexDirection: 'row' }}>
-                  <Pressable onPress={() => keep(it.id)} style={{ flex: 1, paddingVertical: 14, alignItems: 'center', backgroundColor: C.white, borderRightWidth: 1, borderColor: C.ink }}>
+                  <Pressable onPress={() => keep(it.id)} style={{ flex: 1, paddingVertical: 14, alignItems: 'center', backgroundColor: C.white, borderRightWidth: 1, borderColor: C.hairline }}>
                     <Feather name="user-check" size={16} color={C.ink} />
-                    <Text style={{ fontFamily: 'Inter_900Black', fontSize: 15, color: C.ink, marginTop: 3 }}>KEEP</Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, marginTop: 3 }}>Keep</Text>
                   </Pressable>
                   <Pressable onPress={() => setInspect(it.id)} style={{ flex: 1, paddingVertical: 14, alignItems: 'center', backgroundColor: C.ink }}>
                     <Feather name="corner-up-left" size={16} color={C.white} />
-                    <Text style={{ fontFamily: 'Inter_900Black', fontSize: 15, color: C.white, marginTop: 3 }}>RETURN</Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.white, marginTop: 3 }}>Return</Text>
                   </Pressable>
                 </View>
               ) : (
                 <Pressable onPress={() => decideItem(id, it.id, 'pending')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: SP.m, backgroundColor: DECISION_CHIP[d].solid ? C.ink : C.mute }}>
                   <Feather name={d === 'kept' ? 'user-check' : d === 'refused' ? 'slash' : 'package'} size={15} color={DECISION_CHIP[d].solid ? C.white : C.ink} />
-                  <Text style={{ flex: 1, fontFamily: 'Inter_900Black', fontSize: 15, color: DECISION_CHIP[d].solid ? C.white : C.ink, letterSpacing: 0.5 }}>{DECISION_CHIP[d].label}</Text>
-                  <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: DECISION_CHIP[d].solid ? C.white : C.dim }}>CHANGE</Text>
+                  <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 15, color: DECISION_CHIP[d].solid ? C.white : C.ink, letterSpacing: 0.5 }}>{DECISION_CHIP[d].label}</Text>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: DECISION_CHIP[d].solid ? C.white : C.dim }}>Change</Text>
                 </Pressable>
               )}
             </View>
@@ -133,9 +132,9 @@ export default function DoorScreen() {
       </ScrollView>
 
       {/* close door */}
-      <View style={{ padding: SP.l, paddingBottom: insets.bottom + 14, backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.ink }}>
-        <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 13, color: C.dim, textAlign: 'center', marginBottom: SP.s }}>
-          {allReturned ? 'FULL RETURN → bag photo, then back to store' : 'Undecided items are kept · at least one kept = delivered'}
+      <View style={{ padding: SP.l, paddingBottom: insets.bottom + 14, backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.hairline }}>
+        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, textAlign: 'center', marginBottom: SP.s }}>
+          {allReturned ? 'Full return → bag photo, then back to store' : 'Undecided items are kept · at least one kept = delivered'}
         </Text>
         <BrutalButton label="Close door" icon="check-square" big block onPress={onClose} />
       </View>
@@ -150,7 +149,7 @@ export default function DoorScreen() {
               const doorReturnOk = item.policy === 'RETURN';
               return (
                 <>
-                  <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink }}>INSPECT RETURN</Text>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink }}>Inspect return</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: SP.m }}>
                     <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: C.ink, flex: 1 }}>{item.name}</Text>
                     <PolicyBadge policy={item.policy} />
@@ -163,7 +162,7 @@ export default function DoorScreen() {
                   ) : (
                     <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: SP.m, backgroundColor: C.mute }, BORDER(1)]}>
                       <Feather name="lock" size={14} color={C.ink} />
-                      <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.ink, flex: 1 }}>NO DOOR RETURN — REPLACE/FINAL ONLY</Text>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.ink, flex: 1 }}>No door return — replace / final only</Text>
                     </View>
                   )}
                   <View style={{ height: SP.s }} />
@@ -183,7 +182,7 @@ export default function DoorScreen() {
       <Modal transparent visible={!!reasonFor} animationType="fade" onRequestClose={() => setReasonFor(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
           <View style={[{ backgroundColor: C.bg, padding: SP.l, paddingBottom: insets.bottom + 20 }, BORDER(2)]}>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink, marginBottom: 4 }}>PICK A REASON</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginBottom: 4 }}>Pick a reason</Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginBottom: SP.m }}>Photo attached. Why this decision?</Text>
             {RETURN_INSPECT_REASONS.map(r => (
               <Pressable key={r} onPress={() => { if (reasonFor) decideItem(id, reasonFor.itemId, reasonFor.decision); setReasonFor(null); }} style={[{ padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>

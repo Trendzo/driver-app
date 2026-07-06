@@ -39,15 +39,15 @@ export default function StoreHandoffScreen() {
       <View style={{ paddingHorizontal: SP.l, paddingTop: SP.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <MethodBadge method={o.method} />
-          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
         </View>
         <Countdown endsAt={endsAt} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: SP.l, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <View style={[{ padding: SP.m, backgroundColor: C.white, marginBottom: SP.l }, BORDER(1)]}>
-          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.dim, letterSpacing: 1 }}>HAND OVER AT</Text>
-          <Text style={{ fontFamily: 'Inter_900Black', fontSize: 19, color: C.ink, marginTop: 2 }}>{o.store.name}</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: C.dim, letterSpacing: 1 }}>HAND OVER AT</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 19, color: C.ink, marginTop: 2 }}>{o.store.name}</Text>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginTop: 1 }}>{o.store.addr}</Text>
         </View>
 
@@ -56,9 +56,7 @@ export default function StoreHandoffScreen() {
           <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink }}>Open the bag with store staff. They confirm each item — no drop-and-go.</Text>
         </View>
 
-        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: C.ink, marginBottom: SP.s }}>
-          ITEMS ACKNOWLEDGED · {acked.size}/{o.items.length}
-        </Text>
+        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: SP.s }}>Items acknowledged · {acked.size}/{o.items.length}</Text>
         {o.items.map(it => {
           const ok = acked.has(it.id);
           return (
@@ -70,15 +68,15 @@ export default function StoreHandoffScreen() {
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: ok ? C.white : C.ink }}>{it.name}</Text>
                 {it.note && <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: ok ? C.white : C.dim }}>{it.note}</Text>}
               </View>
-              <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: ok ? C.white : C.dim }}>{ok ? 'STORE OK' : 'TAP TO CONFIRM'}</Text>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: ok ? C.white : C.dim }}>{ok ? 'Store OK' : 'Tap to confirm'}</Text>
             </Pressable>
           );
         })}
       </ScrollView>
 
-      <View style={{ padding: SP.l, paddingBottom: insets.bottom + 14, backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.ink }}>
+      <View style={{ padding: SP.l, paddingBottom: insets.bottom + 14, backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.hairline }}>
         {!allAcked && (
-          <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 13, color: C.dim, textAlign: 'center', marginBottom: SP.s }}>
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, textAlign: 'center', marginBottom: SP.s }}>
             All items must be acknowledged before you're released
           </Text>
         )}

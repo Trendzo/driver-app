@@ -140,7 +140,7 @@ export default function OrderDetailScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SP.m }}>
           <MethodBadge method={o.method} />
           <View style={{ flex: 1 }} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, letterSpacing: 0.3 }}>{STATE_LABEL[o.state].toUpperCase()}</Text>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.dim }}>{STATE_LABEL[o.state]}</Text>
         </View>
 
         {/* map + navigate / call */}
@@ -152,25 +152,25 @@ export default function OrderDetailScreen() {
 
         {/* destination */}
         <View style={[{ marginTop: SP.l, padding: SP.m, backgroundColor: C.white }, BORDER(1)]}>
-          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.dim, letterSpacing: 1 }}>{goingToStore ? 'PICKUP STORE' : (isReverse ? 'COLLECT FROM' : 'DELIVER TO')}</Text>
-          <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink, marginTop: 2 }}>{place.name}</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: C.dim, letterSpacing: 1 }}>{goingToStore ? 'PICKUP STORE' : (isReverse ? 'COLLECT FROM' : 'DELIVER TO')}</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginTop: 2 }}>{place.name}</Text>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginTop: 2 }}>{place.addr}</Text>
           {'landmark' in place && (place as any).landmark && (
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginTop: 2 }}>↳ {(place as any).landmark}</Text>
           )}
-          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 13, color: C.ink, marginTop: 6 }}>{place.distanceKm} km away</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: C.ink, marginTop: 6 }}>{place.distanceKm} km away</Text>
         </View>
 
         {/* payment */}
         <View style={[{ marginTop: SP.m, padding: SP.m, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: o.payment === 'COD' ? C.ink : C.white }, BORDER(1)]}>
           {o.payment === 'COD'
-            ? <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.white }}>₹</Text>
+            ? <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.white }}>₹</Text>
             : <Feather name="check-circle" size={18} color={C.ink} />}
           <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: o.payment === 'COD' ? C.white : C.ink }}>
-              {o.payment === 'COD' ? `COLLECT ₹${o.codAmount} CASH` : 'PREPAID · NO CASH'}
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: o.payment === 'COD' ? C.white : C.ink }}>
+              {o.payment === 'COD' ? `Collect ₹${o.codAmount} cash` : 'Prepaid · no cash'}
             </Text>
-            <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 12, color: o.payment === 'COD' ? C.white : C.dim, marginTop: 1 }}>
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: o.payment === 'COD' ? C.white : C.dim, marginTop: 1 }}>
               {isTryBuy ? 'Try & Buy is always prepaid' : o.payment === 'COD' ? 'Collect before marking delivered' : 'Do not collect any cash'}
             </Text>
           </View>
@@ -179,17 +179,14 @@ export default function OrderDetailScreen() {
         {/* items */}
         {!isReverse && (
           <>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: SP.l, marginBottom: SP.s }}>
-              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: C.ink }}>{ASCII.caret} ITEMS ({o.items.length})</Text>
-              <View style={{ flex: 1 }}><AsciiDivider faint /></View>
-            </View>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: SP.l, marginBottom: SP.s }}>Items ({o.items.length})</Text>
             {o.items.map(it => (
               <View key={it.id} style={[{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>
-                <View style={[{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink }]}>
-                  <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: C.white }}>{it.qty}</Text>
+                <View style={{ width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.white }}>{it.qty}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: C.ink }}>{it.name}</Text>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: C.ink }}>{it.name}</Text>
                   {it.note && <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.dim }}>{it.note}</Text>}
                 </View>
                 {isTryBuy && <PolicyBadge policy={it.policy} />}
@@ -206,7 +203,7 @@ export default function OrderDetailScreen() {
       </ScrollView>
 
       {/* sticky action footer */}
-      <View style={{ padding: SP.l, paddingBottom: insets.bottom + 14, backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.ink }}>
+      <View style={{ padding: SP.l, paddingBottom: insets.bottom + 14, backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.hairline }}>
         {renderAction()}
       </View>
 
@@ -214,7 +211,7 @@ export default function OrderDetailScreen() {
       <Modal transparent visible={codModal} animationType="fade" onRequestClose={() => setCodModal(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
           <View style={[{ backgroundColor: C.bg, padding: SP.l, paddingBottom: insets.bottom + 20 }, BORDER(2)]}>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink, marginBottom: 4 }}>CASH COLLECTED</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginBottom: 4 }}>Cash collected</Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginBottom: SP.l }}>Enter the amount you collected from the customer.</Text>
             <BrutalInput value={cod} onChangeText={setCod} label="Amount (₹)" keyboardType="number-pad" />
             <BrutalButton label="Confirm & mark delivered" icon="check" big block onPress={confirmCod} />
@@ -228,7 +225,7 @@ export default function OrderDetailScreen() {
       <Modal transparent visible={reasonModal} animationType="fade" onRequestClose={() => { setReasonModal(false); setCaptureFor(null); }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
           <View style={[{ backgroundColor: C.bg, padding: SP.l, paddingBottom: insets.bottom + 20 }, BORDER(2)]}>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 20, color: C.ink, marginBottom: 4 }}>WHY COULDN'T YOU DELIVER?</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginBottom: 4 }}>Why couldn't you deliver?</Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginBottom: SP.m }}>Photo attached. Pick a reason — the customer is notified.</Text>
             {UNDELIVERED_REASONS.map(r => (
               <Pressable key={r} onPress={() => pickReason(r)} style={[{ padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>
@@ -258,7 +255,7 @@ function DoneBanner({ label }: { label: string }) {
   return (
     <View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: SP.l, backgroundColor: C.ink }, BORDER(1)]}>
       <Feather name="check-circle" size={20} color={C.white} />
-      <Text style={{ fontFamily: 'Inter_900Black', fontSize: 17, color: C.white, letterSpacing: 0.5 }}>{label.toUpperCase()}</Text>
+      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: C.white }}>{label}</Text>
     </View>
   );
 }

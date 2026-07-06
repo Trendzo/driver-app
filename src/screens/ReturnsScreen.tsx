@@ -23,13 +23,13 @@ function ReturnCard({ o, kind }: { o: Order; kind: 'pickup' | 'handoff' }) {
     <Pressable onPress={go} style={[{ backgroundColor: C.white, marginBottom: SP.m }, BORDER(1)]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SP.m }}>
         <MethodBadge method={o.method} />
-        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
       </View>
       <View style={{ height: 1, backgroundColor: C.hairline }} />
       <View style={{ paddingHorizontal: SP.m, paddingTop: SP.m }}>
-        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.dim, letterSpacing: 1 }}>{kind === 'handoff' ? 'TAKE TO STORE' : 'COLLECT FROM'}</Text>
-        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 19, color: C.ink, marginTop: 2 }}>{place.name}</Text>
-        <Text numberOfLines={1} style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginTop: 1 }}>{place.addr}</Text>
+        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase' }}>{kind === 'handoff' ? 'Take to store' : 'Collect from'}</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.ink, marginTop: 3 }}>{place.name}</Text>
+        <Text numberOfLines={1} style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.dim, marginTop: 2 }}>{place.addr}</Text>
         {o.pickupItem && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
             <Feather name="package" size={13} color={C.ink} />
@@ -37,8 +37,8 @@ function ReturnCard({ o, kind }: { o: Order; kind: 'pickup' | 'handoff' }) {
           </View>
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
-          <View style={{ width: 7, height: 7, backgroundColor: C.ink }} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink }}>{STATE_LABEL[o.state].toUpperCase()}</Text>
+          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.ink }} />
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>{STATE_LABEL[o.state]}</Text>
         </View>
       </View>
       <View style={{ paddingHorizontal: SP.m, paddingTop: SP.m }}>
@@ -49,7 +49,7 @@ function ReturnCard({ o, kind }: { o: Order; kind: 'pickup' | 'handoff' }) {
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, flex: 1 }}>
           {kind === 'handoff' ? 'Open bag with store staff' : 'Collect item + photo'}
         </Text>
-        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 14, color: C.ink }}>OPEN →</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.ink }}>OPEN →</Text>
       </View>
     </Pressable>
   );
@@ -57,10 +57,7 @@ function ReturnCard({ o, kind }: { o: Order; kind: 'pickup' | 'handoff' }) {
 
 function Section({ title }: { title: string }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SP.m, marginTop: SP.s }}>
-      <Text style={{ fontFamily: 'Inter_900Black', fontSize: 16, color: C.ink, letterSpacing: 0.5 }}>{ASCII.caret} {title}</Text>
-      <View style={{ flex: 1 }}><AsciiDivider faint /></View>
-    </View>
+    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: SP.m, marginTop: SP.m }}>{title}</Text>
   );
 }
 
@@ -74,17 +71,16 @@ export default function ReturnsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <BrutalStatusBar />
-      <View style={{ paddingTop: insets.top + 10, paddingHorizontal: SP.l, paddingBottom: SP.m, backgroundColor: C.white }}>
-        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 24, color: C.ink, letterSpacing: -0.8 }}>RETURNS</Text>
-        <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 13, color: C.dim, marginTop: 1 }}>Reverse pickups + bags going back to store</Text>
+      <View style={{ paddingTop: insets.top + 12, paddingHorizontal: SP.l, paddingBottom: SP.s }}>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: C.ink, letterSpacing: -0.5 }}>Returns</Text>
+        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, marginTop: 2 }}>Reverse pickups + bags going back to store</Text>
       </View>
-      <View style={{ height: 1, backgroundColor: C.ink }} />
 
       <ScrollView contentContainerStyle={{ padding: SP.l, paddingBottom: insets.bottom + 90 }} showsVerticalScrollIndicator={false}>
         {empty ? (
           <View style={{ alignItems: 'center', paddingVertical: 80 }}>
             <Feather name="corner-up-left" size={44} color={C.faint} />
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 19, color: C.ink, marginTop: 16 }}>NOTHING TO RETURN</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 19, color: C.ink, marginTop: 16 }}>Nothing to return</Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginTop: 4, textAlign: 'center' }}>Reverse pickups and store handoffs{'\n'}will show up here.</Text>
           </View>
         ) : (

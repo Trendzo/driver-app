@@ -141,14 +141,29 @@ export const AGENT = {
   vehicle: 'Honda Activa · MP 09 BK 4471',
   joinedOn: 'Aug 2024',
   docsVerified: true,
+  rating: 4.9,
+  ratingCount: 1284,
+  tripsAllTime: 3120,
 };
 
-// ─── TODAY (read-only counters shown on Profile) ───────────
+// ─── TODAY (read-only counters shown on Home / Profile) ────
 export const TODAY = {
   delivered: 6,
   pending: 3,
   kmLogged: 24.6,
   codCollected: 0,   // running total starts at 0; grows as COD orders close
+  earnings: 742,     // ₹ earned today (base + incentives)
+  tips: 60,          // ₹ tips today
+  onTimePct: 96,
+  acceptancePct: 98,
+  hoursOnline: 5.4,
+};
+
+// ─── THIS WEEK (rolling 7-day summary) ─────────────────────
+export const WEEK = {
+  earnings: 4820,
+  deliveries: 41,
+  days: 6,
 };
 
 // ─── ASSIGNED ORDERS (the agent's queue for today) ─────────

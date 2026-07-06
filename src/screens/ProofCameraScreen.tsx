@@ -53,7 +53,7 @@ export default function ProofCameraScreen() {
         <View style={[{ width: 88, height: 88, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink }, BORDER(2)]}>
           <Feather name="camera" size={40} color={C.white} />
         </View>
-        <Text style={{ fontFamily: 'Inter_900Black', fontSize: 26, color: C.ink, marginTop: SP.l, textAlign: 'center', letterSpacing: -0.5 }}>CAMERA ACCESS</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: C.ink, marginTop: SP.l, textAlign: 'center', letterSpacing: -0.5 }}>Camera access</Text>
         <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 18, color: C.dim, marginTop: 8, textAlign: 'center', lineHeight: 24 }}>
           Trendzo needs your camera to take a delivery-proof photo at the customer's door.
         </Text>
@@ -72,11 +72,11 @@ export default function ProofCameraScreen() {
 
       {/* top bar */}
       <View style={{ position: 'absolute', top: insets.top + 8, left: SP.l, right: SP.l, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Pressable onPress={() => nav.goBack()} hitSlop={10} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: C.white, borderWidth: 1, borderColor: C.ink }}>
+        <Pressable onPress={() => nav.goBack()} hitSlop={10} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: C.white }}>
           <Feather name="x" size={20} color={C.ink} />
         </Pressable>
-        <View style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: C.white, borderWidth: 1, borderColor: C.ink }}>
-          <Text style={{ fontFamily: 'Inter_900Black', fontSize: 14, color: C.ink, letterSpacing: 1 }}>{title.toUpperCase()}</Text>
+        <View style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: C.white, borderRadius: 999 }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>{title}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -94,7 +94,7 @@ export default function ProofCameraScreen() {
         <Pressable onPress={capture} disabled={busy} style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' }}>
           <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: busy ? C.faint : '#fff' }} />
         </Pressable>
-        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 13, color: '#fff', letterSpacing: 1, marginTop: 12 }}>{busy ? 'SAVING…' : 'TAP TO CAPTURE'}</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: '#fff', letterSpacing: 1, marginTop: 12 }}>{busy ? 'SAVING…' : 'TAP TO CAPTURE'}</Text>
       </View>
     </View>
   );

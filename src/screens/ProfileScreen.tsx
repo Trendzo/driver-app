@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, SP, BORDER, ASCII } from '../theme/brutal';
 import { BrutalStatusBar, AsciiDivider, StatTile, BrutalButton } from '../components/Brutal';
@@ -12,7 +13,7 @@ import { AGENT, TODAY, FAQS, ESCALATION, DOCUMENTS } from '../data/mockData';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { phone, signOut, showConfirm, night, toggleNight, codCollected, depositCash, deliveredToday, orders } = useApp();
+  const { phone, signOut, showConfirm, codCollected, depositCash, deliveredToday, orders } = useApp();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const pending = orders.filter(o => !['delivered', 'returned_to_store'].includes(o.state)).length;
 
@@ -32,53 +33,27 @@ export default function ProfileScreen() {
       <BrutalStatusBar />
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false}>
         {/* header */}
-        <View style={{ paddingTop: insets.top + 14, paddingHorizontal: SP.l, paddingBottom: SP.l, backgroundColor: C.white }}>
+        <View style={{ paddingTop: insets.top + 14, paddingHorizontal: SP.l, paddingBottom: SP.l }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-            <View style={[{ width: 60, height: 60, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink }, BORDER(2)]}>
-              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 26, color: C.white }}>{AGENT.name[0]}</Text>
+            <View style={{ width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: C.white }}>{AGENT.name[0]}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'Inter_900Black', fontSize: 24, color: C.ink, letterSpacing: -0.6 }}>{AGENT.name}</Text>
-              <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 14, color: C.dim, marginTop: 1 }}>{AGENT.id} · {phone || AGENT.phone}</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: C.ink, letterSpacing: -0.4 }}>{AGENT.name}</Text>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: C.dim, marginTop: 1 }}>{AGENT.id} · {phone || AGENT.phone}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
                 <Feather name="check-circle" size={11} color={C.ink} />
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.ink }}>Verified agent</Text>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>Verified agent</Text>
               </View>
             </View>
-            <Pressable onPress={toggleNight} style={[{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: night ? C.ink : C.white }, BORDER(1)]}>
-              <Feather name={night ? 'sun' : 'moon'} size={18} color={night ? C.white : C.ink} />
-            </Pressable>
           </View>
           <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: SP.m, padding: SP.s, backgroundColor: C.mute }, BORDER(1)]}>
             <Feather name="map" size={13} color={C.ink} />
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, flex: 1 }}>{AGENT.zone}</Text>
-            <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 13, color: C.dim }}>{AGENT.shift}</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: C.dim }}>{AGENT.shift}</Text>
           </View>
         </View>
-        <View style={{ height: 1, backgroundColor: C.ink }} />
-
         <View style={{ padding: SP.l }}>
-          {/* today counts (read-only) */}
-          <View style={{ flexDirection: 'row', gap: SP.s }}>
-            <StatTile label="Delivered" value={String(deliveredToday)} sub="today" style={{ flex: 1 }} solid />
-            <StatTile label="Pending" value={String(pending)} sub="in queue" style={{ flex: 1 }} />
-            <StatTile label="Km logged" value={String(TODAY.kmLogged)} sub="today" style={{ flex: 1 }} />
-          </View>
-
-          {/* COD running total + deposit */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: SP.xl, marginBottom: SP.m }}>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 17, color: C.ink }}>{ASCII.caret} COD CASH</Text>
-            <View style={{ flex: 1 }}><AsciiDivider faint /></View>
-          </View>
-          <View style={[{ padding: SP.l, backgroundColor: C.ink }, BORDER(1)]}>
-            <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.white, letterSpacing: 1 }}>COLLECTED THIS SHIFT</Text>
-            <Text style={{ fontFamily: 'Inter_900Black', fontSize: 40, color: C.white, letterSpacing: -2, marginTop: 2 }}>₹{codCollected}</Text>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.white, opacity: 0.7, marginTop: 2 }}>Deposit at the office by 7 PM. No cash stays overnight.</Text>
-            <View style={{ marginTop: SP.m }}>
-              <BrutalButton label={codCollected > 0 ? `Deposit ₹${codCollected}` : 'Nothing to deposit'} icon="download" block disabled={codCollected === 0} onPress={deposit} />
-            </View>
-          </View>
-
           {/* agent details */}
           <Section title="DETAILS" />
           <Detail icon="truck" label="Vehicle" value={AGENT.vehicle} />
@@ -90,20 +65,30 @@ export default function ProfileScreen() {
           {/* help / FAQ */}
           <Section title="HELP" />
           {FAQS.map((f, i) => (
-            <Pressable key={i} onPress={() => setOpenFaq(openFaq === i ? null : i)} style={[{ padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 16, color: C.ink }}>{f.q}</Text>
-                <Feather name={openFaq === i ? 'minus' : 'plus'} size={16} color={C.ink} />
-              </View>
-              {openFaq === i && <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginTop: 8, lineHeight: 22 }}>{f.a}</Text>}
-            </Pressable>
+            <Animated.View
+              key={i}
+              layout={LinearTransition.duration(220)}
+              style={[{ padding: SP.m, marginBottom: SP.s, backgroundColor: C.white, overflow: 'hidden' }, BORDER(1)]}
+            >
+              <Pressable onPress={() => setOpenFaq(openFaq === i ? null : i)}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 16, color: C.ink }}>{f.q}</Text>
+                  <Feather name={openFaq === i ? 'minus' : 'plus'} size={16} color={C.ink} />
+                </View>
+              </Pressable>
+              {openFaq === i && (
+                <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginTop: 8, lineHeight: 22 }}>{f.a}</Text>
+                </Animated.View>
+              )}
+            </Animated.View>
           ))}
 
           {/* escalation */}
           <Section title="ESCALATION" />
           {ESCALATION.map(e => (
             <Pressable key={e.label} onPress={() => Linking.openURL(`tel:${e.tel}`).catch(() => {})} style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>
-              <View style={[{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink }]}>
+              <View style={{ width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink }}>
                 <Feather name={e.icon as any} size={16} color={C.white} />
               </View>
               <View style={{ flex: 1 }}>
@@ -117,7 +102,7 @@ export default function ProfileScreen() {
           <View style={{ marginTop: SP.xl }}>
             <BrutalButton label="Sign out" variant="outline" icon="log-out" block onPress={doSignOut} />
           </View>
-          <Text style={{ fontFamily: 'SpaceMono_400Regular', fontSize: 12, color: C.dim, textAlign: 'center', marginTop: SP.l }}>TRENDZO DELIVERY · AGENT APP · v1.0</Text>
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.dim, textAlign: 'center', marginTop: SP.l }}>TRENDZO DELIVERY · AGENT APP · v1.0</Text>
         </View>
       </ScrollView>
     </View>
@@ -126,10 +111,7 @@ export default function ProfileScreen() {
 
 function Section({ title }: { title: string }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: SP.xl, marginBottom: SP.m }}>
-      <Text style={{ fontFamily: 'Inter_900Black', fontSize: 17, color: C.ink }}>{ASCII.caret} {title}</Text>
-      <View style={{ flex: 1 }}><AsciiDivider faint /></View>
-    </View>
+    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: SP.xl, marginBottom: SP.m }}>{title}</Text>
   );
 }
 
@@ -140,12 +122,12 @@ function Detail({ icon, label, value, tag }: { icon: any; label: string; value: 
         <Feather name={icon} size={15} color={C.ink} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 12, color: C.dim, letterSpacing: 1 }}>{label.toUpperCase()}</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: C.dim, letterSpacing: 1 }}>{label.toUpperCase()}</Text>
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: C.ink, marginTop: 1 }}>{value}</Text>
       </View>
       {tag && (
         <View style={[{ paddingHorizontal: 6, paddingVertical: 3, backgroundColor: tag === 'VERIFIED' ? C.ink : C.white }, BORDER(1)]}>
-          <Text style={{ fontFamily: 'SpaceMono_700Bold', fontSize: 11, color: tag === 'VERIFIED' ? C.white : C.ink }}>{tag}</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: tag === 'VERIFIED' ? C.white : C.ink }}>{tag}</Text>
         </View>
       )}
     </View>
