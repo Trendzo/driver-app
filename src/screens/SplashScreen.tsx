@@ -60,7 +60,7 @@ export default function SplashScreen({ onDone }: { onDone: () => void }) {
           transition={{ type: 'timing', duration: 560, delay: 150, easing: Easing.out(Easing.cubic) }}
         >
           <AppText variant="display" color={colors.ink} style={styles.word}>
-            Trendzo
+            TRENDZO
           </AppText>
         </MotiView>
         <MotiView
