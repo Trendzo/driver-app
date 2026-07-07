@@ -18,8 +18,8 @@ export default function OrderDetailScreen() {
   const nav = useNavigation<any>();
   const { id } = useRoute<any>().params;
   const {
-    getOrder, proofPhoto, setProofPhoto, showConfirm,
-    pickUp, startDelivery, markDelivered, markUndelivered, retryDelivery,
+    getOrder, proofPhoto, setProofPhoto, showConfirm, handoffCodeFor,
+    startDelivery, markDelivered, markUndelivered, retryDelivery,
     returnToStore, abort, collectReverse, arriveAtDoor,
   } = useApp();
   const o = getOrder(id);
@@ -97,8 +97,24 @@ export default function OrderDetailScreen() {
       return <DoneBanner label={STATE_LABEL[o.state]} />;
     }
     switch (o.state) {
-      case 'packed':
-        return <SwipeToConfirm label="Picked up · bag collected" icon="shopping-bag" onConfirm={() => pickUp(o.id)} />;
+      case 'packed': {
+        // The STORE releases the parcel by verifying this code — the driver only shows it.
+        // The list poll flips the order to `picked_up` once the store confirms.
+        const code = handoffCodeFor(o.id);
+        return (
+          <View style={{ ...BORDER(), backgroundColor: C.white, padding: SP.l, alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, letterSpacing: 1, color: C.dim, textTransform: 'uppercase' }}>
+              Show this code to the store
+            </Text>
+            <Text style={{ fontSize: 34, fontWeight: '900', letterSpacing: 8, color: C.ink, marginTop: SP.s }}>
+              {code ?? '· · · ·'}
+            </Text>
+            <Text style={{ fontSize: 12, color: C.dim, marginTop: SP.s, textAlign: 'center' }}>
+              The store verifies it, then hands you the parcel.
+            </Text>
+          </View>
+        );
+      }
       case 'picked_up':
         return <SwipeToConfirm label="Start delivery" icon="navigation" onConfirm={() => startDelivery(o.id)} />;
       case 'out_for_delivery':

@@ -13,7 +13,11 @@ import { AGENT, TODAY, FAQS, ESCALATION, DOCUMENTS } from '../data/mockData';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { phone, signOut, showConfirm, codCollected, depositCash, deliveredToday, orders } = useApp();
+  const { phone, driver, signOut, showConfirm, codCollected, depositCash, deliveredToday, orders } = useApp();
+  const name = driver?.name ?? AGENT.name;
+  const vehicle = driver?.vehicleNumber
+    ? `${driver.vehicleType ?? ''} ${driver.vehicleNumber}`.trim()
+    : AGENT.vehicle;
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const pending = orders.filter(o => !['delivered', 'returned_to_store'].includes(o.state)).length;
 
@@ -36,11 +40,11 @@ export default function ProfileScreen() {
         <View style={{ paddingTop: insets.top + 14, paddingHorizontal: SP.l, paddingBottom: SP.l }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
             <View style={{ width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: C.white }}>{AGENT.name[0]}</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: C.white }}>{name[0]}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: C.ink, letterSpacing: -0.4 }}>{AGENT.name}</Text>
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: C.dim, marginTop: 1 }}>{AGENT.id} · {phone || AGENT.phone}</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: C.ink, letterSpacing: -0.4 }}>{name}</Text>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: C.dim, marginTop: 1 }}>{phone || driver?.phone || AGENT.phone}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
                 <Feather name="check-circle" size={11} color={C.ink} />
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>Verified agent</Text>
@@ -56,7 +60,7 @@ export default function ProfileScreen() {
         <View style={{ padding: SP.l }}>
           {/* agent details */}
           <Section title="DETAILS" />
-          <Detail icon="truck" label="Vehicle" value={AGENT.vehicle} />
+          <Detail icon="truck" label="Vehicle" value={vehicle} />
           <Detail icon="calendar" label="Joined" value={AGENT.joinedOn} />
           {DOCUMENTS.map(d => (
             <Detail key={d.name} icon={d.icon} label={d.name} value={d.sub} tag={d.status} />

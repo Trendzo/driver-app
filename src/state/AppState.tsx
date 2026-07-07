@@ -11,11 +11,18 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  Order, OrderState, DoorDecision, ASSIGNED_ORDERS, AGENT, TODAY,
+  Order, OrderState, DoorDecision, AGENT, TODAY,
 } from '../data/mockData';
 import { setNight as applyNight } from '../theme/brutal';
+import { setAuthToken, setOnUnauthorized } from '../api/session';
+import { isApiError } from '../api/errors';
+import { toOrder } from '../api/adapter';
+import * as api from '../api';
+import type { DriverProfile, DoorItemDecision } from '../api';
 
 const AUTH_KEY = '@trendzo/phone';
+const TOKEN_KEY = '@trendzo/token';
+const PROFILE_KEY = '@trendzo/profile';
 const ONBOARD_KEY = '@trendzo/onboarded';
 const NIGHT_KEY = '@trendzo/night';
 
@@ -39,7 +46,9 @@ export const isActive = (o: Order) => !TERMINAL.includes(o.state);
 
 type AppCtx = {
   phone: string | null;
-  signIn: (phone: string) => void;
+  token: string | null;
+  driver: DriverProfile | null;
+  signIn: (args: { token: string; phone: string; driver: DriverProfile }) => void;
   signOut: () => void;
   onboarded: boolean;
   setOnboarded: (v: boolean) => void;
@@ -47,11 +56,19 @@ type AppCtx = {
   agent: typeof AGENT;
   orders: Order[];
   getOrder: (id: string) => Order | undefined;
+  refresh: () => void;
+  /** Store→driver handoff code to display while `packed` (the store verifies it). */
+  handoffCodeFor: (id: string) => string | null;
 
-  // ── forward-delivery transitions (Express / Standard) ──
-  pickUp: (id: string) => void;              // packed -> picked_up (store handover)
+  // ── broadcast offers (packed, unassigned orders offered to all drivers) ──
+  offers: Order[];
+  acceptOffer: (id: string) => void;
+  rejectOffer: (id: string) => void;
+
+  // ── forward-delivery transitions (Express / Standard). Pickup is store-driven
+  //    (the store verifies the handoff code) — there is no driver "picked up" action. ──
   startDelivery: (id: string) => void;       // picked_up -> out_for_delivery
-  markDelivered: (id: string, opts?: { cod?: number }) => void;  // -> delivered
+  markDelivered: (id: string, opts?: { cod?: number; otp?: string }) => void;  // -> delivered
   markUndelivered: (id: string, reason: string) => void;          // -> undelivered
   retryDelivery: (id: string) => void;        // undelivered -> out_for_delivery
   returnToStore: (id: string) => void;        // -> returning_to_store
@@ -66,7 +83,7 @@ type AppCtx = {
   arriveAtDoor: (id: string) => void;         // out_for_delivery -> at_door, start timer
   decideItem: (id: string, itemId: string, d: DoorDecision) => void;
   addExtension: (id: string) => void;
-  closeDoor: (id: string) => void;            // apply close rules -> delivered | returning_to_store
+  closeDoor: (id: string, otp?: string) => void;  // apply close rules -> delivered | returning_to_store
 
   // ── COD running total ──
   codCollected: number;
@@ -96,8 +113,12 @@ const Ctx = createContext<AppCtx | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [phone, setPhone] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [driver, setDriver] = useState<DriverProfile | null>(null);
   const [onboarded, setOnboardedState] = useState(false);
-  const [orders, setOrders] = useState<Order[]>(() => ASSIGNED_ORDERS.map(o => ({ ...o })));
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [offers, setOffers] = useState<Order[]>([]);
+  const [handoffCodes, setHandoffCodes] = useState<Record<string, string | null>>({});
   const [door, setDoor] = useState<Record<string, DoorState>>({});
   const [codCollected, setCodCollected] = useState(TODAY.codCollected);
   const [deliveredToday, setDeliveredToday] = useState(TODAY.delivered);
@@ -110,9 +131,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ── hydrate persisted auth / onboarding / theme ──
   useEffect(() => {
-    AsyncStorage.multiGet([AUTH_KEY, ONBOARD_KEY, NIGHT_KEY]).then(pairs => {
+    AsyncStorage.multiGet([AUTH_KEY, TOKEN_KEY, PROFILE_KEY, ONBOARD_KEY, NIGHT_KEY]).then(pairs => {
       const map = Object.fromEntries(pairs);
+      if (map[TOKEN_KEY]) { setToken(map[TOKEN_KEY]); setAuthToken(map[TOKEN_KEY]); }
       if (map[AUTH_KEY]) setPhone(map[AUTH_KEY]);
+      if (map[PROFILE_KEY]) { try { setDriver(JSON.parse(map[PROFILE_KEY])); } catch { /* ignore */ } }
       if (map[ONBOARD_KEY] === '1') setOnboardedState(true);
       if (map[NIGHT_KEY] === '1') { applyNight(true); setNightState(true); }
     }).catch(() => {});
@@ -146,8 +169,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const signIn = useCallback((p: string) => { setPhone(p); AsyncStorage.setItem(AUTH_KEY, p).catch(() => {}); }, []);
-  const signOut = useCallback(() => { setPhone(null); AsyncStorage.removeItem(AUTH_KEY).catch(() => {}); }, []);
+  const signIn = useCallback((args: { token: string; phone: string; driver: DriverProfile }) => {
+    setToken(args.token);
+    setAuthToken(args.token);
+    setPhone(args.phone);
+    setDriver(args.driver);
+    AsyncStorage.multiSet([
+      [TOKEN_KEY, args.token],
+      [AUTH_KEY, args.phone],
+      [PROFILE_KEY, JSON.stringify(args.driver)],
+    ]).catch(() => {});
+  }, []);
+  const signOut = useCallback(() => {
+    setToken(null);
+    setAuthToken(null);
+    setPhone(null);
+    setDriver(null);
+    AsyncStorage.multiRemove([TOKEN_KEY, AUTH_KEY, PROFILE_KEY]).catch(() => {});
+  }, []);
+
+  // A 401 from any API call (expired/invalidated token) drops us back to the login gate.
+  useEffect(() => {
+    setOnUnauthorized(() => signOut());
+    return () => setOnUnauthorized(null);
+  }, [signOut]);
   const setOnboarded = useCallback((v: boolean) => {
     setOnboardedState(v);
     AsyncStorage.setItem(ONBOARD_KEY, v ? '1' : '0').catch(() => {});
@@ -155,56 +200,126 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const getOrder = useCallback((id: string) => orders.find(o => o.id === id), [orders]);
 
-  // ── forward transitions ──
-  const pickUp = useCallback((id: string) => {
-    setOrderState(id, 'picked_up'); logEvent(id, 'picked_up');
-    showToast('Picked up', 'Bag collected from store', 'shopping-bag');
-  }, [setOrderState, logEvent, showToast]);
-
-  const startDelivery = useCallback((id: string) => {
-    setOrderState(id, 'out_for_delivery'); logEvent(id, 'out_for_delivery');
-    showToast('Out for delivery', 'Navigate to the customer', 'navigation');
-  }, [setOrderState, logEvent, showToast]);
-
-  const markDelivered = useCallback((id: string, opts?: { cod?: number }) => {
-    setOrderState(id, 'delivered');
-    logEvent(id, 'delivered');
-    setDeliveredToday(n => n + 1);
-    if (opts?.cod && opts.cod > 0) {
-      setCodCollected(c => c + opts.cod!);
-      logEvent(id, 'cod_collected', `₹${opts.cod}`);
+  // ── Fetch assigned deliveries from the backend (periodic + after mutations) ──
+  const refresh = useCallback(async () => {
+    try {
+      const rows = await api.listDeliveries();
+      setOrders(rows.map(toOrder));
+      const codes: Record<string, string | null> = {};
+      for (const r of rows) codes[r.id] = r.agentHandoffCode ?? null;
+      setHandoffCodes(codes);
+    } catch {
+      // Transient (offline / expired) — keep the last snapshot; a 401 already signs out.
     }
+  }, []);
+
+  useEffect(() => {
+    if (!token) { setOrders([]); setHandoffCodes({}); return; }
+    refresh();
+    const t = setInterval(refresh, 8000);
+    return () => clearInterval(t);
+  }, [token, refresh]);
+
+  // ── Broadcast offers via LONG-POLL: the request parks on the server until an offer
+  //    appears (or ~25s), then we apply it and immediately re-request — near-instant. ──
+  useEffect(() => {
+    if (!token) { setOffers([]); return; }
+    let cancelled = false;
+    (async function loop() {
+      while (!cancelled) {
+        try {
+          const rows = await api.longPollOffers(25000);
+          if (!cancelled) setOffers(rows.map(toOrder));
+        } catch {
+          if (cancelled) break;
+          await new Promise((r) => setTimeout(r, 3000)); // backoff on network error
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
+
+  const handoffCodeFor = useCallback((id: string) => handoffCodes[id] ?? null, [handoffCodes]);
+
+  // Fire a backend mutation, then re-sync from the server (which is authoritative on state).
+  const run = useCallback(async (fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+    } catch (e) {
+      showToast('Action failed', isApiError(e) ? e.message : 'Please try again', 'alert-circle');
+    } finally {
+      refresh();
+    }
+  }, [refresh, showToast]);
+
+  // ── broadcast offers: accept (atomic claim) / reject (dismiss) ──
+  const acceptOffer = useCallback((id: string) => {
+    setOffers(prev => prev.filter(o => o.id !== id));
+    run(() => api.acceptOffer(id).then(() => {
+      showToast('Order accepted', 'Head to the store to collect', 'check-circle');
+    }));
+  }, [run, showToast]);
+
+  const rejectOffer = useCallback((id: string) => {
+    setOffers(prev => prev.filter(o => o.id !== id));
+    run(() => api.rejectOffer(id));
+  }, [run]);
+
+  // ── forward transitions (optimistic UI + backend, then re-sync) ──
+  const startDelivery = useCallback((id: string) => {
+    setOrderState(id, 'out_for_delivery');
+    showToast('Out for delivery', 'Navigate to the customer', 'navigation');
+    run(() => api.departDelivery(id));
+  }, [setOrderState, showToast, run]);
+
+  const markDelivered = useCallback((id: string, opts?: { cod?: number; otp?: string }) => {
+    setOrderState(id, 'delivered');
+    setDeliveredToday(n => n + 1);
+    if (opts?.cod && opts.cod > 0) setCodCollected(c => c + opts.cod!);
+    const photo = proofPhoto;
     setProofPhoto(null);
     showToast('Delivered', 'Order closed successfully', 'check-circle');
-  }, [setOrderState, logEvent, showToast]);
+    run(() => api.deliverOrder(id, {
+      ...(opts?.cod && opts.cod > 0 ? { codCollectedPaise: Math.round(opts.cod * 100) } : {}),
+      ...(opts?.otp ? { otp: opts.otp } : {}),
+      ...(photo ? { proofPhotos: [photo] } : {}),
+    }));
+  }, [setOrderState, showToast, run, proofPhoto]);
 
   const markUndelivered = useCallback((id: string, reason: string) => {
-    setOrderState(id, 'undelivered'); logEvent(id, 'undelivered', reason);
+    setOrderState(id, 'undelivered');
+    const photo = proofPhoto;
     setProofPhoto(null);
-    showToast("Couldn't deliver", 'Customer notified · 1 retry left', 'alert-triangle');
-  }, [setOrderState, logEvent, showToast]);
+    showToast("Couldn't deliver", 'Logged · customer notified', 'alert-triangle');
+    run(() => api.markUndelivered(id, reason, photo ? [photo] : undefined));
+  }, [setOrderState, showToast, run, proofPhoto]);
 
   const retryDelivery = useCallback((id: string) => {
-    setOrderState(id, 'out_for_delivery'); logEvent(id, 'retry');
+    setOrderState(id, 'out_for_delivery');
     showToast('Retrying delivery', 'One more attempt', 'rotate-ccw');
-  }, [setOrderState, logEvent, showToast]);
+    run(() => api.departDelivery(id));
+  }, [setOrderState, showToast, run]);
 
   const returnToStore = useCallback((id: string) => {
-    setOrderState(id, 'returning_to_store'); logEvent(id, 'returning_to_store');
+    setOrderState(id, 'returning_to_store');
     showToast('Returning to store', 'Reach the store within 30 min', 'corner-up-left');
-  }, [setOrderState, logEvent, showToast]);
+    run(() => api.returnToStore(id));
+  }, [setOrderState, showToast, run]);
 
   const handedBack = useCallback((id: string) => {
-    setOrderState(id, 'returned_to_store'); logEvent(id, 'returned_to_store');
+    setOrderState(id, 'returned_to_store');
     showToast('Handed back to store', 'All items acknowledged', 'check-circle');
-  }, [setOrderState, logEvent, showToast]);
+    run(() => api.markReturned(id));
+  }, [setOrderState, showToast, run]);
 
   const abort = useCallback((id: string) => {
-    setOrderState(id, 'returning_to_store'); logEvent(id, 'aborted');
+    setOrderState(id, 'returning_to_store');
     showToast('Delivery aborted', 'Bring the bag back to the store', 'x-octagon');
-  }, [setOrderState, logEvent, showToast]);
+    run(() => api.returnToStore(id));
+  }, [setOrderState, showToast, run]);
 
   const collectReverse = useCallback((id: string) => {
+    // Reverse pickup is not wired to the backend yet (needs the reverse-pickup domain).
     setOrderState(id, 'returning_to_store'); logEvent(id, 'reverse_collected');
     setProofPhoto(null);
     showToast('Item collected', 'Bring it to the store', 'package');
@@ -212,7 +327,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ── Try-and-Buy door ──
   const arriveAtDoor = useCallback((id: string) => {
-    setOrderState(id, 'at_door'); logEvent(id, 'at_door');
+    setOrderState(id, 'at_door');
     setDoor(prev => {
       if (prev[id]) return prev;  // keep an existing timer if re-entering
       const order = orders.find(o => o.id === id);
@@ -220,15 +335,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       order?.items.forEach(it => { decisions[it.id] = 'pending'; });
       return { ...prev, [id]: { endsAt: Date.now() + 30 * 60 * 1000, extensionUsed: false, decisions, closed: false } };
     });
-  }, [orders, setOrderState, logEvent]);
+    run(() => api.doorOpen(id));
+  }, [orders, setOrderState, run]);
 
   const decideItem = useCallback((id: string, itemId: string, d: DoorDecision) => {
     setDoor(prev => {
       const st = prev[id]; if (!st) return prev;
       return { ...prev, [id]: { ...st, decisions: { ...st.decisions, [itemId]: d } } };
     });
-    logEvent(id, `item_${d}`, itemId);
-  }, [logEvent]);
+  }, []);
 
   const addExtension = useCallback((id: string) => {
     setDoor(prev => {
@@ -236,9 +351,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { ...prev, [id]: { ...st, endsAt: st.endsAt + 5 * 60 * 1000, extensionUsed: true } };
     });
     showToast('+5 minutes added', 'One extension used', 'clock');
-  }, [showToast]);
+    run(() => api.doorExtend(id));
+  }, [showToast, run]);
 
-  const closeDoor = useCallback((id: string) => {
+  // App door decisions → backend door-close decisions.
+  const DOOR_DECISION: Record<DoorDecision, DoorItemDecision['decision']> = {
+    pending: 'kept',
+    kept: 'kept',
+    returned: 'returned',
+    store_decides: 'returned',
+    refused: 'return_rejected',
+  };
+
+  const closeDoor = useCallback((id: string, otp?: string) => {
     const order = orders.find(o => o.id === id);
     const st = door[id];
     if (!order || !st) return;
@@ -246,18 +371,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const decisions = { ...st.decisions };
     order.items.forEach(it => { if (decisions[it.id] === 'pending') decisions[it.id] = 'kept'; });
     setDoor(prev => ({ ...prev, [id]: { ...prev[id], decisions, closed: true } }));
-    // Returned / store_decides ride back; refused / kept stay with the customer.
+    const items: DoorItemDecision[] = order.items.map(it => ({
+      orderItemId: it.id,
+      decision: DOOR_DECISION[decisions[it.id]] ?? 'kept',
+    }));
     const ridingBack = order.items.filter(it => ['returned', 'store_decides'].includes(decisions[it.id]));
     const allReturned = ridingBack.length === order.items.length;
     if (allReturned) {
-      setOrderState(id, 'returning_to_store'); logEvent(id, 'door_full_reject');
+      setOrderState(id, 'returning_to_store');
       showToast('Full return', 'Bring the bag back to the store', 'corner-up-left');
     } else {
-      setOrderState(id, 'delivered'); logEvent(id, 'door_delivered');
+      setOrderState(id, 'delivered');
       setDeliveredToday(n => n + 1);
       showToast('Door closed', 'Kept items locked in · delivered', 'check-circle');
     }
-  }, [orders, door, setOrderState, logEvent, showToast]);
+    run(() => api.doorClose(id, items, otp));
+  }, [orders, door, setOrderState, showToast, run]);
 
   const depositCash = useCallback(() => {
     setCodCollected(0);
@@ -269,10 +398,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const hideConfirm = useCallback(() => setConfirm(null), []);
 
   const value = useMemo<AppCtx>(() => ({
-    phone, signIn, signOut,
+    phone, token, driver, signIn, signOut,
     onboarded, setOnboarded,
-    agent: AGENT, orders, getOrder,
-    pickUp, startDelivery, markDelivered, markUndelivered, retryDelivery,
+    agent: AGENT, orders, getOrder, refresh, handoffCodeFor,
+    offers, acceptOffer, rejectOffer,
+    startDelivery, markDelivered, markUndelivered, retryDelivery,
     returnToStore, handedBack, abort, collectReverse,
     door, arriveAtDoor, decideItem, addExtension, closeDoor,
     codCollected, depositCash,
@@ -281,7 +411,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     night, toggleNight,
     toast, showToast, hideToast,
     confirm, showConfirm, hideConfirm,
-  }), [phone, signIn, signOut, onboarded, setOnboarded, orders, getOrder, pickUp, startDelivery, markDelivered, markUndelivered, retryDelivery, returnToStore, handedBack, abort, collectReverse, door, arriveAtDoor, decideItem, addExtension, closeDoor, codCollected, depositCash, proofPhoto, deliveredToday, night, toggleNight, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
+  }), [phone, token, driver, signIn, signOut, onboarded, setOnboarded, orders, getOrder, refresh, handoffCodeFor, offers, acceptOffer, rejectOffer, startDelivery, markDelivered, markUndelivered, retryDelivery, returnToStore, handedBack, abort, collectReverse, door, arriveAtDoor, decideItem, addExtension, closeDoor, codCollected, depositCash, proofPhoto, deliveredToday, night, toggleNight, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

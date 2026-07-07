@@ -1,6 +1,7 @@
-// Trendzo Partner auth — login (phone OTP or email) + create account.
-// Demo only: OTP is 1234 / any 4 digits; signup just needs valid-looking fields.
-import React, { useMemo, useRef, useState } from 'react';
+// Trendzo Partner auth — phone-OTP login (MSG91). First OTP verify creates the driver
+// account server-side (instant-active). Email/signup are not backed — phone OTP only.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -23,8 +24,10 @@ import {
   spacing,
 } from '../ui';
 import { useApp } from '../state/AppState';
+import { driverOtpLogin } from '../api';
+import { isApiError } from '../api/errors';
+import { MSG91_WIDGET_ID, MSG91_TOKEN_AUTH } from '../config/env';
 
-const DEMO_OTP = '1234';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VEHICLES = ['Bike', 'Scooter', 'Car', 'Bicycle'];
 
@@ -62,14 +65,38 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
   const [otp, setOtp] = useState(['', '', '', '']);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [reqId, setReqId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const otpRefs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
 
   const phoneValid = phone.replace(/\D/g, '').length === 10;
 
-  const sendOtp = () => {
+  useEffect(() => {
+    try {
+      OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
+    } catch {
+      // Native module not linked (pre dev-client rebuild) — sendOtp will surface a clear error.
+    }
+  }, []);
+
+  const sendOtp = async () => {
     if (!phoneValid) return showToast('Enter your number', 'A valid 10-digit mobile number', 'alert-circle');
-    setStep('otp');
-    showToast('OTP sent', `Code sent to +91 ${phone}`, 'message-square');
+    if (!MSG91_WIDGET_ID) return showToast('OTP not configured', 'Set the MSG91 driver widget', 'alert-circle');
+    setBusy(true);
+    try {
+      const res: any = await OTPWidget.sendOTP({ identifier: `91${phone.replace(/\D/g, '')}` });
+      if (res?.type === 'error') throw new Error(res?.message || 'Could not send OTP');
+      const rid = typeof res === 'string' ? res : res?.message;
+      if (!rid) throw new Error('Could not send OTP');
+      setReqId(String(rid));
+      setOtp(['', '', '', '']);
+      setStep('otp');
+      showToast('OTP sent', `Code sent to +91 ${phone}`, 'message-square');
+    } catch (e: any) {
+      showToast('Could not send OTP', e?.message ?? 'Try again', 'alert-circle');
+    } finally {
+      setBusy(false);
+    }
   };
   const setDigit = (i: number, v: string) => {
     const d = v.replace(/\D/g, '').slice(-1);
@@ -78,14 +105,27 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
     setOtp(next);
     if (d && i < 3) otpRefs[i + 1].current?.focus();
   };
-  const verify = () => {
-    if (otp.join('').length < 4) return showToast('Enter the code', 'Type all 4 digits', 'alert-circle');
-    signIn('+91 ' + phone);
+  const verify = async () => {
+    const code = otp.join('').replace(/\D/g, '');
+    if (code.length < 4 || !reqId) return showToast('Enter the code', 'Type all 4 digits', 'alert-circle');
+    if (busy) return;
+    setBusy(true);
+    try {
+      const vr: any = await OTPWidget.verifyOTP({ reqId, otp: code });
+      if (vr?.type === 'error') throw new Error(vr?.message || 'Invalid OTP');
+      const accessToken = typeof vr === 'string' ? vr : vr?.message;
+      if (!accessToken) throw new Error('Verification failed');
+      const { token, driver } = await driverOtpLogin(String(accessToken));
+      signIn({ token, phone: `+91 ${phone}`, driver });
+    } catch (e: any) {
+      showToast('Sign-in failed', isApiError(e) ? e.message : (e?.message ?? 'Invalid OTP'), 'alert-circle');
+    } finally {
+      setBusy(false);
+    }
   };
   const emailLogin = () => {
-    if (!EMAIL_RE.test(email.trim())) return showToast('Invalid email', 'Enter a valid email address', 'alert-circle');
-    if (password.length < 6) return showToast('Check password', 'At least 6 characters', 'alert-circle');
-    signIn(email.trim());
+    // Backend is phone-OTP only; there is no driver email login.
+    showToast('Use phone OTP', 'Sign in with your mobile number', 'smartphone');
   };
 
   return (
@@ -137,7 +177,7 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
                 </View>
                 <View style={styles.hintRow}>
                   <Icon name="information-circle-outline" size={15} color={colors.meta} />
-                  <AppText variant="meta" color={colors.meta}>Demo OTP is {DEMO_OTP} · or any 4 digits</AppText>
+                  <AppText variant="meta" color={colors.meta}>Enter the 4-digit code we texted you</AppText>
                 </View>
                 <Button label="Verify & continue" tone="accent" onPress={verify} icon={<Icon name="checkmark" size={18} color={colors.accentInk} />} />
                 <Pressable onPress={() => showToast('OTP resent', `New code sent to +91 ${phone}`, 'refresh-cw')} style={styles.center}>
@@ -167,7 +207,7 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
 /* ─── SIGNUP ────────────────────────────────────────────────── */
 function SignupView({ onLogin }: { onLogin: () => void }) {
   const insets = useSafeAreaInsets();
-  const { signIn, showToast } = useApp();
+  const { showToast } = useApp();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -184,8 +224,9 @@ function SignupView({ onLogin }: { onLogin: () => void }) {
     if (!vehicle) return showToast('Pick a vehicle', 'Select your delivery vehicle', 'alert-circle');
     if (vehicleNo.trim().length < 4 && vehicle !== 'Bicycle') return showToast('Vehicle number', 'Enter your vehicle number', 'alert-circle');
     if (city.trim().length < 2) return showToast('Enter city', 'Where do you deliver?', 'alert-circle');
-    showToast('Account created', 'Welcome to Trendzo Partner', 'check-circle');
-    signIn('+91 ' + phone);
+    // Accounts are created automatically on first phone-OTP sign-in (no separate signup).
+    showToast('Just sign in', 'Your account is created when you verify your phone', 'smartphone');
+    onLogin();
   };
 
   return (

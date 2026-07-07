@@ -101,7 +101,7 @@ type Phase = 'splash' | 'onboarding' | 'main';
 
 export default function RootNav() {
   const [phase, setPhase] = useState<Phase>('splash');
-  const { phone, onboarded, setOnboarded, toast, hideToast, confirm, hideConfirm, night } = useApp();
+  const { token, onboarded, setOnboarded, toast, hideToast, confirm, hideConfirm, night } = useApp();
   const lastBack = useRef(0);
 
   useEffect(() => {
@@ -125,7 +125,7 @@ export default function RootNav() {
   if (phase === 'onboarding') {
     return <OnboardingScreen onDone={() => { setOnboarded(true); setPhase('main'); }} />;
   }
-  if (!phone) {
+  if (!token) {
     return (
       <View key={night ? 'd' : 'l'} style={{ flex: 1, backgroundColor: C.bg }}>
         <AuthScreen />

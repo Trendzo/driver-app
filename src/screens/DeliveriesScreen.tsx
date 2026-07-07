@@ -74,11 +74,51 @@ function DeliveryCard({ o }: { o: Order }) {
   );
 }
 
+// Broadcast offer — a packed order any driver can claim. Accept (first wins) or pass.
+function OfferCard({ o }: { o: Order }) {
+  const { acceptOffer, rejectOffer } = useApp();
+  return (
+    <View style={[{ backgroundColor: C.white, marginBottom: SP.m }, BORDER(1)]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SP.m, gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+          <MethodBadge method={o.method} />
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
+        </View>
+        {o.payment === 'COD' && (
+          <View style={{ paddingHorizontal: 9, paddingVertical: 3, backgroundColor: C.ink, borderRadius: 999 }}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.white }}>COD ₹{o.codAmount}</Text>
+          </View>
+        )}
+      </View>
+      <View style={{ height: 1, backgroundColor: C.hairline }} />
+      <View style={{ paddingHorizontal: SP.m, paddingTop: SP.m, gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Feather name="shopping-bag" size={13} color={C.dim} />
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.ink, flex: 1 }}>{o.store.name}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Feather name="map-pin" size={13} color={C.dim} />
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.dim, flex: 1 }}>{o.customer.addr || o.customer.name}</Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: SP.s, padding: SP.m, marginTop: SP.s }}>
+        <Pressable onPress={() => rejectOffer(o.id)} style={[{ flex: 1, alignItems: 'center', paddingVertical: 12, backgroundColor: C.bg }, BORDER(1)]}>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.ink }}>Pass</Text>
+        </Pressable>
+        <Pressable onPress={() => acceptOffer(o.id)} style={[{ flex: 2, alignItems: 'center', paddingVertical: 12, backgroundColor: C.ink }, BORDER(1)]}>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.white }}>Accept order</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 export default function DeliveriesScreen() {
   const insets = useSafeAreaInsets();
-  const { agent, orders } = useApp();
+  const { agent, orders, offers } = useApp();
   // forward deliveries only (reverse pickups live on the Returns tab)
   const active = orders.filter(o => o.method !== 'REVERSE_PICKUP' && isActive(o));
+  const available = offers.filter(o => o.method !== 'REVERSE_PICKUP');
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -98,18 +138,25 @@ export default function DeliveriesScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: SP.l, paddingBottom: insets.bottom + 90 }} showsVerticalScrollIndicator={false}>
-        {active.length === 0 ? (
+        {available.length > 0 && (
+          <>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: SP.m }}>Available to accept</Text>
+            {available.map(o => <OfferCard key={o.id} o={o} />)}
+            <View style={{ height: SP.m }} />
+          </>
+        )}
+        {active.length === 0 && available.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 80 }}>
             <Feather name="check-circle" size={44} color={C.faint} />
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 19, color: C.ink, marginTop: 16 }}>All clear</Text>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginTop: 4, textAlign: 'center' }}>No active deliveries right now.{'\n'}New orders for your zone appear here.</Text>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginTop: 4, textAlign: 'center' }}>No deliveries right now.{'\n'}New orders appear here to accept.</Text>
           </View>
-        ) : (
+        ) : active.length > 0 ? (
           <>
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: SP.m }}>Active now</Text>
             {active.map(o => <DeliveryCard key={o.id} o={o} />)}
           </>
-        )}
+        ) : null}
       </ScrollView>
     </View>
   );

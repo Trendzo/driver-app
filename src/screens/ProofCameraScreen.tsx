@@ -10,6 +10,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { C, SP, BORDER } from '../theme/brutal';
 import { BrutalButton, BrutalStatusBar } from '../components/Brutal';
 import { useApp } from '../state/AppState';
+import { uploadPhoto } from '../api';
 
 export default function ProofCameraScreen() {
   const insets = useSafeAreaInsets();
@@ -29,12 +30,14 @@ export default function ProofCameraScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.5, skipProcessing: true });
       if (photo?.uri) {
-        setProofPhoto(photo.uri);
+        // Upload to Cloudinary so we store a hosted URL (the backend rejects local file uris).
+        const url = await uploadPhoto(photo.uri);
+        setProofPhoto(url);
         showToast('Proof captured', 'Photo attached to this delivery', 'camera');
         nav.goBack();
       }
     } catch {
-      showToast('Camera error', 'Could not take photo, try again', 'camera-off');
+      showToast('Upload failed', 'Could not save the photo, try again', 'camera-off');
     } finally {
       setBusy(false);
     }

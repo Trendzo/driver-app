@@ -1,6 +1,6 @@
 // Home dashboard — the rider's day at a glance: earnings, rating, deliveries,
 // distance, COD to deposit, active jobs, and this week's summary.
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,8 +9,10 @@ import { BrutalStatusBar, BrutalCard, BrutalButton, SectionHead, StatTile } from
 import { MethodBadge } from '../components/DeliveryBits';
 import { useApp, isActive } from '../state/AppState';
 import { AGENT, TODAY, WEEK, STATE_LABEL } from '../data/mockData';
+import { earningsSummary, type EarningsSummary } from '../api';
 
 const rupee = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+const rupeeP = (paise: number) => rupee(paise / 100);
 
 function Chip({ icon, text }: { icon: any; text: string }) {
   return (
@@ -33,6 +35,13 @@ function MiniStat({ icon, label }: { icon: any; label: string }) {
 export default function HomeScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { agent, orders, deliveredToday, codCollected, depositCash, showConfirm } = useApp();
+  const [earn, setEarn] = useState<EarningsSummary | null>(null);
+  useEffect(() => {
+    earningsSummary().then(setEarn).catch(() => {});
+  }, []);
+  const todayEarnings = earn ? rupeeP(earn.today.earningsPaise) : rupee(TODAY.earnings);
+  const todayDelivered = earn ? earn.today.deliveries : deliveredToday;
+  const todayCod = earn ? earn.today.codCollectedPaise / 100 : codCollected;
 
   const active = orders.filter((o) => o.method !== 'REVERSE_PICKUP' && isActive(o));
   const hour = new Date().getHours();
@@ -78,7 +87,7 @@ export default function HomeScreen({ navigation }: any) {
         <BrutalCard solid style={{ marginTop: SP.l }}>
           <Text style={[T.label, { color: 'rgba(255,255,255,0.65)' }]}>Today's earnings</Text>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 44, color: C.white, letterSpacing: -1.5, marginTop: 4 }}>
-            {rupee(TODAY.earnings)}
+            {todayEarnings}
           </Text>
           <View style={{ flexDirection: 'row', gap: 16, marginTop: 10 }}>
             <MiniStat icon="trending-up" label={`+${rupee(TODAY.tips)} tips`} />
@@ -88,7 +97,7 @@ export default function HomeScreen({ navigation }: any) {
 
         {/* Stats grid */}
         <View style={{ flexDirection: 'row', gap: SP.m, marginTop: SP.m }}>
-          <StatTile style={{ flex: 1 }} label="Delivered" value={String(deliveredToday)} sub="today" />
+          <StatTile style={{ flex: 1 }} label="Delivered" value={String(todayDelivered)} sub="today" />
           <StatTile style={{ flex: 1 }} label="Rating" value={`${agent?.rating ?? 4.9}★`} sub={`${(agent?.ratingCount ?? 0).toLocaleString('en-IN')} trips`} />
         </View>
         <View style={{ flexDirection: 'row', gap: SP.m, marginTop: SP.m }}>
@@ -102,10 +111,10 @@ export default function HomeScreen({ navigation }: any) {
             <MaterialCommunityIcons name="currency-inr" size={20} color={C.ink} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={T.label}>Cash to deposit</Text>
-            <Text style={[T.h2, { marginTop: 2 }]}>{rupee(codCollected)}</Text>
+            <Text style={T.label}>Cash collected today</Text>
+            <Text style={[T.h2, { marginTop: 2 }]}>{rupee(todayCod)}</Text>
           </View>
-          <BrutalButton label="Deposit" small disabled={codCollected <= 0} onPress={deposit} />
+          <BrutalButton label="Deposit" small disabled={todayCod <= 0} onPress={deposit} />
         </BrutalCard>
 
         {/* Active now */}
@@ -143,17 +152,17 @@ export default function HomeScreen({ navigation }: any) {
         <BrutalCard style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1 }}>
             <Text style={T.label}>Earnings</Text>
-            <Text style={[T.h2, { marginTop: 2 }]}>{rupee(WEEK.earnings)}</Text>
+            <Text style={[T.h2, { marginTop: 2 }]}>{earn ? rupeeP(earn.week.earningsPaise) : rupee(WEEK.earnings)}</Text>
           </View>
           <View style={{ width: 1, height: 36, backgroundColor: C.hairline, marginHorizontal: SP.m }} />
           <View style={{ flex: 1 }}>
             <Text style={T.label}>Deliveries</Text>
-            <Text style={[T.h2, { marginTop: 2 }]}>{WEEK.deliveries}</Text>
+            <Text style={[T.h2, { marginTop: 2 }]}>{earn ? earn.week.deliveries : WEEK.deliveries}</Text>
           </View>
           <View style={{ width: 1, height: 36, backgroundColor: C.hairline, marginHorizontal: SP.m }} />
           <View style={{ flex: 1 }}>
             <Text style={T.label}>Days</Text>
-            <Text style={[T.h2, { marginTop: 2 }]}>{WEEK.days}</Text>
+            <Text style={[T.h2, { marginTop: 2 }]}>{earn ? earn.week.days : WEEK.days}</Text>
           </View>
         </BrutalCard>
       </ScrollView>
