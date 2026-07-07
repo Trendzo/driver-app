@@ -61,7 +61,10 @@ export type DoorItemDecision = {
 
 /* ── Auth ─────────────────────────────────────────────────────────────── */
 export function driverOtpLogin(accessToken: string) {
-  return apiPost<{ token: string; driver: DriverProfile }>('/auth/driver/otp/msg91', { accessToken });
+  return apiPost<{ token: string; driver: DriverProfile; isNew: boolean }>(
+    '/auth/driver/otp/msg91',
+    { accessToken },
+  );
 }
 
 /* ── Broadcast offers ─────────────────────────────────────────────────── */

@@ -48,8 +48,10 @@ type AppCtx = {
   phone: string | null;
   token: string | null;
   driver: DriverProfile | null;
-  signIn: (args: { token: string; phone: string; driver: DriverProfile }) => void;
+  signupMode: boolean;
+  signIn: (args: { token: string; phone: string; driver: DriverProfile; isNew?: boolean }) => void;
   signOut: () => void;
+  completeProfile: (patch: { name: string; vehicleType?: string; vehicleNumber?: string; city?: string }) => Promise<void>;
   onboarded: boolean;
   setOnboarded: (v: boolean) => void;
 
@@ -115,6 +117,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [phone, setPhone] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [driver, setDriver] = useState<DriverProfile | null>(null);
+  // New accounts (no prior signup) route through the profile-completion (signup) screen.
+  const [signupMode, setSignupMode] = useState(false);
   const [onboarded, setOnboardedState] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [offers, setOffers] = useState<Order[]>([]);
@@ -169,24 +173,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const signIn = useCallback((args: { token: string; phone: string; driver: DriverProfile }) => {
-    setToken(args.token);
-    setAuthToken(args.token);
-    setPhone(args.phone);
-    setDriver(args.driver);
-    AsyncStorage.multiSet([
-      [TOKEN_KEY, args.token],
-      [AUTH_KEY, args.phone],
-      [PROFILE_KEY, JSON.stringify(args.driver)],
-    ]).catch(() => {});
-  }, []);
+  const signIn = useCallback(
+    (args: { token: string; phone: string; driver: DriverProfile; isNew?: boolean }) => {
+      setToken(args.token);
+      setAuthToken(args.token);
+      setPhone(args.phone);
+      setDriver(args.driver);
+      setSignupMode(!!args.isNew); // new account → complete-profile screen before the app
+      AsyncStorage.multiSet([
+        [TOKEN_KEY, args.token],
+        [AUTH_KEY, args.phone],
+        [PROFILE_KEY, JSON.stringify(args.driver)],
+      ]).catch(() => {});
+    },
+    [],
+  );
   const signOut = useCallback(() => {
     setToken(null);
     setAuthToken(null);
     setPhone(null);
     setDriver(null);
+    setSignupMode(false);
     AsyncStorage.multiRemove([TOKEN_KEY, AUTH_KEY, PROFILE_KEY]).catch(() => {});
   }, []);
+
+  // Finish signup: save the new driver's name/vehicle/city, then drop into the app.
+  const completeProfile = useCallback(
+    async (patch: { name: string; vehicleType?: string; vehicleNumber?: string; city?: string }) => {
+      const updated = await api.updateProfile(patch);
+      setDriver(updated);
+      setSignupMode(false);
+      AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(updated)).catch(() => {});
+    },
+    [],
+  );
 
   // A 401 from any API call (expired/invalidated token) drops us back to the login gate.
   useEffect(() => {
@@ -398,7 +418,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const hideConfirm = useCallback(() => setConfirm(null), []);
 
   const value = useMemo<AppCtx>(() => ({
-    phone, token, driver, signIn, signOut,
+    phone, token, driver, signupMode, signIn, signOut, completeProfile,
     onboarded, setOnboarded,
     agent: AGENT, orders, getOrder, refresh, handoffCodeFor,
     offers, acceptOffer, rejectOffer,
@@ -411,7 +431,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     night, toggleNight,
     toast, showToast, hideToast,
     confirm, showConfirm, hideConfirm,
-  }), [phone, token, driver, signIn, signOut, onboarded, setOnboarded, orders, getOrder, refresh, handoffCodeFor, offers, acceptOffer, rejectOffer, startDelivery, markDelivered, markUndelivered, retryDelivery, returnToStore, handedBack, abort, collectReverse, door, arriveAtDoor, decideItem, addExtension, closeDoor, codCollected, depositCash, proofPhoto, deliveredToday, night, toggleNight, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
+  }), [phone, token, driver, signupMode, signIn, signOut, completeProfile, onboarded, setOnboarded, orders, getOrder, refresh, handoffCodeFor, offers, acceptOffer, rejectOffer, startDelivery, markDelivered, markUndelivered, retryDelivery, returnToStore, handedBack, abort, collectReverse, door, arriveAtDoor, decideItem, addExtension, closeDoor, codCollected, depositCash, proofPhoto, deliveredToday, night, toggleNight, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

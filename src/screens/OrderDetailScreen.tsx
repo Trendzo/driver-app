@@ -28,6 +28,7 @@ export default function OrderDetailScreen() {
   const [codModal, setCodModal] = useState(false);
   const [reasonModal, setReasonModal] = useState(false);
   const [cod, setCod] = useState('');
+  const [otp, setOtp] = useState(''); // consumer delivery OTP (door deliveries carry one)
 
   // fresh photo gate every time we open a delivery
   useEffect(() => { setProofPhoto(null); }, [id]);
@@ -64,11 +65,11 @@ export default function OrderDetailScreen() {
 
   const finalizeDelivered = () => {
     if (o.payment === 'COD') { setCod(String(o.codAmount)); setCodModal(true); }
-    else { markDelivered(o.id); nav.goBack(); }
+    else { markDelivered(o.id, { otp: otp.trim() || undefined }); nav.goBack(); }
   };
   const confirmCod = () => {
     setCodModal(false);
-    markDelivered(o.id, { cod: Number(cod) || o.codAmount });
+    markDelivered(o.id, { cod: Number(cod) || o.codAmount, otp: otp.trim() || undefined });
     nav.goBack();
   };
   const pickReason = (reason: string) => {
@@ -124,7 +125,10 @@ export default function OrderDetailScreen() {
         return (
           <>
             <PhotoRow photo={proofPhoto} label="Proof-of-delivery photo (required)" onTake={() => openCamera('proof')} />
-            <SwipeToConfirm label={o.payment === 'COD' ? `Collect ₹${o.codAmount} + deliver` : 'Mark delivered'} icon="check" disabled={!proofPhoto} onConfirm={finalizeDelivered} />
+            <View style={{ marginBottom: SP.s }}>
+              <BrutalInput value={otp} onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 8))} label="Customer's delivery OTP" placeholder="Ask the customer" keyboardType="number-pad" />
+            </View>
+            <SwipeToConfirm label={o.payment === 'COD' ? `Collect ₹${o.codAmount} + deliver` : 'Mark delivered'} icon="check" disabled={!proofPhoto || otp.trim().length === 0} onConfirm={finalizeDelivered} />
             <View style={{ height: SP.s }} />
             <BrutalButton label="Couldn't deliver" variant="outline" icon="phone-off" block onPress={() => openCamera('location')} />
           </>

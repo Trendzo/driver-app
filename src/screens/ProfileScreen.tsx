@@ -14,7 +14,7 @@ import { AGENT, TODAY, FAQS, ESCALATION, DOCUMENTS } from '../data/mockData';
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { phone, driver, signOut, showConfirm, codCollected, depositCash, deliveredToday, orders } = useApp();
-  const name = driver?.name ?? AGENT.name;
+  const name = driver?.name || 'Driver';
   const vehicle = driver?.vehicleNumber
     ? `${driver.vehicleType ?? ''} ${driver.vehicleNumber}`.trim()
     : AGENT.vehicle;

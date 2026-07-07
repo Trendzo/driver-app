@@ -115,8 +115,8 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
       if (vr?.type === 'error') throw new Error(vr?.message || 'Invalid OTP');
       const accessToken = typeof vr === 'string' ? vr : vr?.message;
       if (!accessToken) throw new Error('Verification failed');
-      const { token, driver } = await driverOtpLogin(String(accessToken));
-      signIn({ token, phone: `+91 ${phone}`, driver });
+      const { token, driver, isNew } = await driverOtpLogin(String(accessToken));
+      signIn({ token, phone: `+91 ${phone}`, driver, isNew });
     } catch (e: any) {
       showToast('Sign-in failed', isApiError(e) ? e.message : (e?.message ?? 'Invalid OTP'), 'alert-circle');
     } finally {
@@ -265,6 +265,78 @@ function SignupView({ onLogin }: { onLogin: () => void }) {
 
           <Pressable onPress={onLogin} style={[styles.center, { marginTop: spacing.lg }]}>
             <AppText variant="body" color={colors.meta}>Already a partner? <AppText variant="bodyMedium" color={colors.ink}>Log in</AppText></AppText>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Screen>
+  );
+}
+
+/* ─── COMPLETE PROFILE (new drivers, post-OTP) ──────────────────── */
+export function CompleteProfileScreen() {
+  const insets = useSafeAreaInsets();
+  const { phone, completeProfile, signOut, showToast } = useApp();
+  const [name, setName] = useState('');
+  const [vehicle, setVehicle] = useState('');
+  const [vehicleNo, setVehicleNo] = useState('');
+  const [city, setCity] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const finish = async () => {
+    if (name.trim().length < 2) return showToast('Enter your name', 'Your full name', 'alert-circle');
+    if (!vehicle) return showToast('Pick a vehicle', 'Select your delivery vehicle', 'alert-circle');
+    if (vehicleNo.trim().length < 4 && vehicle !== 'Bicycle') return showToast('Vehicle number', 'Enter your vehicle number', 'alert-circle');
+    if (city.trim().length < 2) return showToast('Enter city', 'Where do you deliver?', 'alert-circle');
+    setBusy(true);
+    try {
+      await completeProfile({
+        name: name.trim(),
+        vehicleType: vehicle,
+        ...(vehicleNo.trim() ? { vehicleNumber: vehicleNo.trim() } : {}),
+        city: city.trim(),
+      });
+    } catch {
+      showToast('Could not save', 'Please try again', 'alert-circle');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Screen edges={['top', 'bottom']} padded={false}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <Brand />
+          <AppText variant="display" color={colors.ink} style={styles.headline}>Set up{'\n'}your profile</AppText>
+          <AppText variant="body" color={colors.meta} style={styles.sub}>
+            You're verified as <AppText variant="bodyMedium" color={colors.ink}>{phone ?? 'your number'}</AppText>. Add a few details to start delivering.
+          </AppText>
+
+          <View style={styles.form}>
+            <Field label="Full name" required value={name} onChangeText={setName} placeholder="e.g. Ravi Kumar" autoCapitalize="words" />
+
+            <View style={styles.block}>
+              <AppText variant="sectionLabel" color={colors.meta} style={styles.blockLabel}>Vehicle *</AppText>
+              <View style={styles.chips}>
+                {VEHICLES.map((v) => {
+                  const on = vehicle === v;
+                  return (
+                    <Pressable key={v} onPress={() => setVehicle(v)} style={[styles.chip, on && styles.chipOn]}>
+                      <AppText variant="bodyMedium" color={on ? colors.accentInk : colors.ink}>{v}</AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Field label="Vehicle number" value={vehicleNo} onChangeText={(t) => setVehicleNo(t.toUpperCase())} placeholder="MP 09 AB 1234" autoCapitalize="characters" autoCorrect={false} />
+            <Field label="City / zone" required value={city} onChangeText={setCity} placeholder="e.g. Indore" autoCapitalize="words" />
+
+            <Button label={busy ? 'Saving…' : 'Start delivering'} tone="accent" disabled={busy} onPress={finish} icon={<Icon name="checkmark" size={18} color={colors.accentInk} />} />
+          </View>
+
+          <Pressable onPress={signOut} style={[styles.center, { marginTop: spacing.lg }]}>
+            <AppText variant="body" color={colors.meta}>Wrong number? <AppText variant="bodyMedium" color={colors.ink}>Sign out</AppText></AppText>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>

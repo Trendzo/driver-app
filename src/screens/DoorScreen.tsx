@@ -2,16 +2,16 @@
 // 30-min countdown, per-item Keep/Return, inspection with Accept / Refuse /
 // Store-decides, one +5 min extension, and the close-door rules. The agent only
 // RECORDS what happened — never cash, never a refund decision at the door.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Modal } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, SP, BORDER } from '../theme/brutal';
-import { BrutalStatusBar, BrutalButton } from '../components/Brutal';
+import { BrutalStatusBar, BrutalButton, BrutalInput } from '../components/Brutal';
 import { Countdown, PolicyBadge } from '../components/DeliveryBits';
 import { useApp } from '../state/AppState';
-import { DoorDecision, RETURN_INSPECT_REASONS } from '../data/mockData';
+import { DoorDecision, RETURN_INSPECT_REASONS, UNDELIVERED_REASONS } from '../data/mockData';
 
 const DECISION_CHIP: Record<Exclude<DoorDecision, 'pending'>, { label: string; solid: boolean }> = {
   kept: { label: 'Kept', solid: false },
@@ -24,7 +24,7 @@ export default function DoorScreen() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation<any>();
   const { id } = useRoute<any>().params;
-  const { getOrder, door, arriveAtDoor, decideItem, addExtension, closeDoor, proofPhoto, setProofPhoto } = useApp();
+  const { getOrder, door, arriveAtDoor, decideItem, addExtension, closeDoor, markUndelivered, proofPhoto, setProofPhoto } = useApp();
   const o = getOrder(id);
   const st = door[id];
 
@@ -37,11 +37,16 @@ export default function DoorScreen() {
   // a decision waiting on its mandatory photo
   const [pending, setPending] = useState<{ itemId: string; decision: DoorDecision; needsReason: boolean } | null>(null);
   const [closing, setClosing] = useState(false);
+  // Consumer delivery OTP — read it off the customer at the door. Kept in a ref too so the
+  // post-photo close (full-return path) reads the current value without a stale closure.
+  const [otp, setOtp] = useState('');
+  const otpRef = useRef('');
+  const [undelivModal, setUndelivModal] = useState(false);
 
   // when a photo comes back, advance the pending decision
   useEffect(() => {
     if (!proofPhoto) return;
-    if (closing) { setClosing(false); setProofPhoto(null); closeDoor(id); nav.goBack(); return; }
+    if (closing) { setClosing(false); setProofPhoto(null); closeDoor(id, otpRef.current.trim() || undefined); nav.goBack(); return; }
     if (pending) {
       const p = pending; setPending(null); setProofPhoto(null);
       if (p.needsReason) setReasonFor({ itemId: p.itemId, decision: p.decision });
@@ -67,7 +72,7 @@ export default function DoorScreen() {
   const allReturned = effective.every(d => d === 'returned' || d === 'store_decides');
   const onClose = () => {
     if (allReturned) { setClosing(true); camera('Full return', 'Photograph the whole bag before leaving'); }
-    else { closeDoor(id); nav.goBack(); }
+    else { closeDoor(id, otpRef.current.trim() || undefined); nav.goBack(); }
   };
 
   return (
@@ -133,10 +138,23 @@ export default function DoorScreen() {
 
       {/* close door */}
       <View style={{ padding: SP.l, paddingBottom: insets.bottom + 14, backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.hairline }}>
+        <View style={{ marginBottom: SP.m }}>
+          <BrutalInput
+            value={otp}
+            onChangeText={(t) => { const v = t.replace(/\D/g, '').slice(0, 8); setOtp(v); otpRef.current = v; }}
+            label="Customer's delivery OTP"
+            placeholder="Ask the customer"
+            keyboardType="number-pad"
+          />
+        </View>
         <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, textAlign: 'center', marginBottom: SP.s }}>
-          {allReturned ? 'Full return → bag photo, then back to store' : 'Undecided items are kept · at least one kept = delivered'}
+          {otp.trim().length === 0
+            ? "Enter the customer's OTP to close"
+            : allReturned ? 'Full return → bag photo, then back to store' : 'Undecided items are kept · at least one kept = delivered'}
         </Text>
-        <BrutalButton label="Close door" icon="check-square" big block onPress={onClose} />
+        <BrutalButton label="Close door" icon="check-square" big block disabled={otp.trim().length === 0} onPress={onClose} />
+        <View style={{ height: SP.s }} />
+        <BrutalButton label="Couldn't deliver · customer not found" variant="outline" icon="phone-off" block onPress={() => setUndelivModal(true)} />
       </View>
 
       {/* inspection sheet */}
@@ -190,6 +208,22 @@ export default function DoorScreen() {
               </Pressable>
             ))}
             <BrutalButton label="Cancel" variant="ghost" block onPress={() => setReasonFor(null)} />
+          </View>
+        </View>
+      </Modal>
+
+      {/* couldn't deliver (customer not found) */}
+      <Modal transparent visible={undelivModal} animationType="fade" onRequestClose={() => setUndelivModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+          <View style={[{ backgroundColor: C.bg, padding: SP.l, paddingBottom: insets.bottom + 20 }, BORDER(2)]}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginBottom: 4 }}>Couldn't deliver</Text>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginBottom: SP.m }}>Why? The order is logged as undelivered.</Text>
+            {UNDELIVERED_REASONS.map(r => (
+              <Pressable key={r} onPress={() => { setUndelivModal(false); markUndelivered(id, r); nav.goBack(); }} style={[{ padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: C.ink }}>{r}</Text>
+              </Pressable>
+            ))}
+            <BrutalButton label="Cancel" variant="ghost" block onPress={() => setUndelivModal(false)} />
           </View>
         </View>
       </Modal>

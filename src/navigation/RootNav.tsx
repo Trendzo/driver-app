@@ -11,7 +11,7 @@ import { useApp, isActive } from '../state/AppState';
 
 import SplashScreen from '../screens/SplashScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
-import AuthScreen from '../screens/AuthScreens';
+import AuthScreen, { CompleteProfileScreen } from '../screens/AuthScreens';
 import HomeScreen from '../screens/HomeScreen';
 import DeliveriesScreen from '../screens/DeliveriesScreen';
 import ReturnsScreen from '../screens/ReturnsScreen';
@@ -101,7 +101,7 @@ type Phase = 'splash' | 'onboarding' | 'main';
 
 export default function RootNav() {
   const [phase, setPhase] = useState<Phase>('splash');
-  const { token, onboarded, setOnboarded, toast, hideToast, confirm, hideConfirm, night } = useApp();
+  const { token, signupMode, onboarded, setOnboarded, toast, hideToast, confirm, hideConfirm, night } = useApp();
   const lastBack = useRef(0);
 
   useEffect(() => {
@@ -129,6 +129,16 @@ export default function RootNav() {
     return (
       <View key={night ? 'd' : 'l'} style={{ flex: 1, backgroundColor: C.bg }}>
         <AuthScreen />
+        <BrutalToast toast={toast} onHide={hideToast} />
+        <BrutalConfirm confirm={confirm} onHide={hideConfirm} />
+      </View>
+    );
+  }
+  // Signed in but brand-new account → complete the signup profile before the app.
+  if (signupMode) {
+    return (
+      <View key={night ? 'd' : 'l'} style={{ flex: 1, backgroundColor: C.bg }}>
+        <CompleteProfileScreen />
         <BrutalToast toast={toast} onHide={hideToast} />
         <BrutalConfirm confirm={confirm} onHide={hideConfirm} />
       </View>

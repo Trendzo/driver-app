@@ -34,7 +34,7 @@ function MiniStat({ icon, label }: { icon: any; label: string }) {
 
 export default function HomeScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { agent, orders, deliveredToday, codCollected, depositCash, showConfirm } = useApp();
+  const { agent, driver, orders, deliveredToday, codCollected, depositCash, showConfirm } = useApp();
   const [earn, setEarn] = useState<EarningsSummary | null>(null);
   useEffect(() => {
     earningsSummary().then(setEarn).catch(() => {});
@@ -46,7 +46,7 @@ export default function HomeScreen({ navigation }: any) {
   const active = orders.filter((o) => o.method !== 'REVERSE_PICKUP' && isActive(o));
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const initial = (agent?.name ?? 'R').trim().charAt(0).toUpperCase();
+  const initial = (driver?.name || 'D').trim().charAt(0).toUpperCase();
 
   const deposit = () =>
     showConfirm({
