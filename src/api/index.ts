@@ -53,6 +53,33 @@ export type EarningsSummary = {
   week: { earningsPaise: number; deliveries: number; days: number };
 };
 
+/** Reverse pickup task — collect a consumer's return from home, bring to store. */
+export type BackendReversePickup = {
+  id: string;
+  orderId: string;
+  returnIds: string[];
+  status: 'pending' | 'assigned' | 'collected' | 'delivered_to_store' | 'cancelled' | string;
+  addressLine1: string;
+  addressLine2: string | null;
+  addressCity: string | null;
+  addressPincode: string | null;
+  addressLat: number | null;
+  addressLng: number | null;
+  itemsLabel: string;
+  collectedPhotos: string[];
+  createdAt: string;
+  assignedAt: string | null;
+  collectedAt: string | null;
+  deliveredAt: string | null;
+  order: {
+    consumerNameSnap: string;
+    consumerPhoneSnap: string;
+    storeNameSnap: string;
+    storeAddressSnap: string | null;
+    store: { lat: number | null; lng: number | null; contactPhone: string | null } | null;
+  };
+};
+
 export type DoorItemDecision = {
   orderItemId: string;
   decision: 'kept' | 'returned' | 'refused' | 'return_rejected';
@@ -95,6 +122,25 @@ export const markUndelivered = (id: string, reason: string, photos?: string[]) =
   apiPost(`/driver/deliveries/${id}/undelivered`, photos ? { reason, photos } : { reason });
 export const returnToStore = (id: string) => apiPost(`/driver/deliveries/${id}/return`);
 export const markReturned = (id: string) => apiPost(`/driver/deliveries/${id}/returned`);
+
+/* ── Reverse pickups (collect a return from the customer's home) ──────── */
+/** Tasks assigned to me that are still in motion (assigned | collected). */
+export const listReversePickups = () => apiGet<BackendReversePickup[]>('/driver/reverse-pickups');
+/** Broadcast pool — pending, unassigned tasks any driver can claim. */
+export const listReversePickupOffers = () =>
+  apiGet<BackendReversePickup[]>('/driver/reverse-pickups/offers');
+export const acceptReversePickup = (id: string) =>
+  apiPost<{ reversePickupId: string; accepted: boolean }>(`/driver/reverse-pickups/${id}/accept`);
+export const rejectReversePickup = (id: string) =>
+  apiPost<{ reversePickupId: string; rejected: boolean }>(`/driver/reverse-pickups/${id}/reject`);
+/** Collected at the door — consumer-spoken OTP + ≥1 photo of the goods. */
+export const collectReversePickup = (
+  id: string,
+  body: { otp?: string; photos: string[]; note?: string },
+) => apiPost(`/driver/reverse-pickups/${id}/collect`, body);
+/** Handed to the store — starts the store's verification window. */
+export const deliverReversePickupToStore = (id: string) =>
+  apiPost(`/driver/reverse-pickups/${id}/deliver-to-store`);
 
 /* ── Location / earnings / profile ────────────────────────────────────── */
 export const pingLocation = (lat: number, lng: number) => apiPost('/driver/location', { lat, lng });

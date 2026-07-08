@@ -100,12 +100,19 @@ export default function OrderDetailScreen() {
   const renderAction = () => {
     if (isReverse) {
       if (o.state === 'out_for_delivery') {
+        // Backend proof: ≥1 photo of the goods + the customer's return OTP.
         return (
           <>
-            <PhotoRow photo={proofPhoto} label="Item photo (recommended)" onTake={() => openCamera('reverse')} />
-            <SwipeToConfirm label="Confirm pickup" icon="package" onConfirm={() => { collectReverse(o.id); nav.goBack(); }} />
+            <PhotoRow photo={proofPhoto} label="Item photo (required)" onTake={() => openCamera('reverse')} />
+            <View style={{ marginBottom: SP.s }}>
+              <BrutalInput value={otp} onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 8))} label="Customer's return OTP" placeholder="Ask the customer" keyboardType="number-pad" />
+            </View>
+            <SwipeToConfirm label="Confirm pickup" icon="package" disabled={!proofPhoto || otp.trim().length === 0} onConfirm={() => { collectReverse(o.id, otp.trim()); nav.goBack(); }} />
           </>
         );
+      }
+      if (o.state === 'returning_to_store') {
+        return <BrutalButton label="Hand over at the store" icon="corner-up-left" big block onPress={() => nav.navigate('StoreHandoff', { id: o.id })} />;
       }
       return <DoneBanner label={STATE_LABEL[o.state]} />;
     }

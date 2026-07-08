@@ -55,6 +55,42 @@ function ReturnCard({ o, kind }: { o: Order; kind: 'pickup' | 'handoff' }) {
   );
 }
 
+// Broadcast reverse-pickup offer — any driver can claim it (first accept wins).
+function PickupOfferCard({ o }: { o: Order }) {
+  const { acceptOffer, rejectOffer } = useApp();
+  return (
+    <View style={[{ backgroundColor: C.white, marginBottom: SP.m }, BORDER(1)]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SP.m }}>
+        <MethodBadge method={o.method} />
+        <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim, flexShrink: 1 }}>#{o.id.replace(/^rpk_/, '').slice(0, 8)}</Text>
+      </View>
+      <View style={{ height: 1, backgroundColor: C.hairline }} />
+      <View style={{ paddingHorizontal: SP.m, paddingTop: SP.m, gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Feather name="package" size={13} color={C.ink} />
+          <Text numberOfLines={2} style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, flex: 1 }}>{o.pickupItem}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Feather name="map-pin" size={13} color={C.dim} />
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.dim, flex: 1 }}>Collect: {o.customer.addr || o.customer.name}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Feather name="shopping-bag" size={13} color={C.dim} />
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.dim, flex: 1 }}>Drop: {o.store.name}</Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: SP.s, padding: SP.m, marginTop: SP.s }}>
+        <Pressable onPress={() => rejectOffer(o.id)} style={[{ flex: 1, alignItems: 'center', paddingVertical: 12, backgroundColor: C.bg }, BORDER(1)]}>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.ink }}>Pass</Text>
+        </Pressable>
+        <Pressable onPress={() => acceptOffer(o.id)} style={[{ flex: 2, alignItems: 'center', paddingVertical: 12, backgroundColor: C.ink }, BORDER(1)]}>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.white }}>Accept pickup</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function Section({ title }: { title: string }) {
   return (
     <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: SP.m, marginTop: SP.m }}>{title}</Text>
@@ -63,10 +99,11 @@ function Section({ title }: { title: string }) {
 
 export default function ReturnsScreen() {
   const insets = useSafeAreaInsets();
-  const { orders } = useApp();
+  const { orders, offers } = useApp();
   const pickups = orders.filter(o => o.method === 'REVERSE_PICKUP' && isActive(o) && o.state !== 'returning_to_store');
   const handoffs = orders.filter(o => o.state === 'returning_to_store');
-  const empty = pickups.length === 0 && handoffs.length === 0;
+  const available = offers.filter(o => o.method === 'REVERSE_PICKUP');
+  const empty = pickups.length === 0 && handoffs.length === 0 && available.length === 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -89,6 +126,8 @@ export default function ReturnsScreen() {
             {handoffs.map(o => <ReturnCard key={o.id} o={o} kind="handoff" />)}
             {pickups.length > 0 && <Section title="REVERSE PICKUPS" />}
             {pickups.map(o => <ReturnCard key={o.id} o={o} kind="pickup" />)}
+            {available.length > 0 && <Section title="AVAILABLE TO ACCEPT" />}
+            {available.map(o => <PickupOfferCard key={o.id} o={o} />)}
           </>
         )}
       </ScrollView>

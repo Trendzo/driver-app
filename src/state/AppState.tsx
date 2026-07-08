@@ -16,7 +16,7 @@ import {
 import { setNight as applyNight } from '../theme/brutal';
 import { setAuthToken, setOnUnauthorized } from '../api/session';
 import { isApiError } from '../api/errors';
-import { toOrder } from '../api/adapter';
+import { toOrder, toReverseOrder } from '../api/adapter';
 import * as Location from 'expo-location';
 import { initFcm, teardownFcm } from '../fcm';
 import { USE_FCM_OFFERS } from '../config/env';
@@ -65,7 +65,8 @@ type AppCtx = {
   /** Store→driver handoff code to display while `packed` (the store verifies it). */
   handoffCodeFor: (id: string) => string | null;
 
-  // ── broadcast offers (packed, unassigned orders offered to all drivers) ──
+  // ── broadcast offers: packed forward orders + pending reverse pickups,
+  //    offered to all drivers (accept = atomic claim, reject = dismiss) ──
   offers: Order[];
   acceptOffer: (id: string) => void;
   rejectOffer: (id: string) => void;
@@ -80,8 +81,8 @@ type AppCtx = {
   handedBack: (id: string) => void;           // returning_to_store -> returned_to_store
   abort: (id: string) => void;                // mid-delivery -> returning_to_store
 
-  // ── reverse pickup ──
-  collectReverse: (id: string) => void;       // out_for_delivery -> returning_to_store
+  // ── reverse pickup (OTP + item photo proof; photo comes from proofPhoto) ──
+  collectReverse: (id: string, otp?: string) => void;  // assigned -> collected
 
   // ── Try-and-Buy door ──
   door: Record<string, DoorState>;
@@ -223,11 +224,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const getOrder = useCallback((id: string) => orders.find(o => o.id === id), [orders]);
 
-  // ── Fetch assigned deliveries from the backend (periodic + after mutations) ──
+  // ── Fetch assigned work from the backend (periodic + after mutations):
+  //    forward deliveries + reverse-pickup tasks, merged into one queue. ──
   const refresh = useCallback(async () => {
     try {
-      const rows = await api.listDeliveries();
-      setOrders(rows.map(toOrder));
+      const [rows, tasks] = await Promise.all([
+        api.listDeliveries(),
+        api.listReversePickups().catch(() => [] as api.BackendReversePickup[]),
+      ]);
+      setOrders([...rows.map(toOrder), ...tasks.map(toReverseOrder)]);
       const codes: Record<string, string | null> = {};
       for (const r of rows) codes[r.id] = r.agentHandoffCode ?? null;
       setHandoffCodes(codes);
@@ -250,10 +255,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     let stop = () => {};
 
+    // Both offer pools ride the same server-side bus, so one wake refetches both.
     const refreshOffers = async () => {
       try {
-        const rows = await api.listOffers();
-        if (!cancelled) setOffers(rows.map(toOrder));
+        const [rows, tasks] = await Promise.all([
+          api.listOffers(),
+          api.listReversePickupOffers().catch(() => [] as api.BackendReversePickup[]),
+        ]);
+        if (!cancelled) setOffers([...rows.map(toOrder), ...tasks.map(toReverseOrder)]);
       } catch {
         // transient; a 401 already signs out
       }
@@ -268,13 +277,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const t = setInterval(refreshOffers, 45000);
         stop = () => clearInterval(t);
       } else {
-        // Long-poll fallback: park on the server until an offer appears, then re-request.
+        // Long-poll fallback: park on the server until the pool changes, then
+        // refetch BOTH feeds (reverse tasks fire the same bus, so the forward
+        // long-poll wake covers them too).
         let loopCancelled = false;
         (async function loop() {
           while (!loopCancelled) {
             try {
               const rows = await api.longPollOffers(25000);
-              if (!loopCancelled) setOffers(rows.map(toOrder));
+              const tasks = await api.listReversePickupOffers().catch(
+                () => [] as api.BackendReversePickup[],
+              );
+              if (!loopCancelled) setOffers([...rows.map(toOrder), ...tasks.map(toReverseOrder)]);
             } catch {
               if (loopCancelled) break;
               await new Promise((r) => setTimeout(r, 3000));
@@ -321,17 +335,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refresh, showToast]);
 
-  // ── broadcast offers: accept (atomic claim) / reject (dismiss) ──
+  // ── broadcast offers: accept (atomic claim) / reject (dismiss). Reverse-pickup
+  //    tasks share the feed and are routed by their id prefix (rpk_). ──
   const acceptOffer = useCallback((id: string) => {
     setOffers(prev => prev.filter(o => o.id !== id));
-    run(() => api.acceptOffer(id).then(() => {
-      showToast('Order accepted', 'Head to the store to collect', 'check-circle');
+    const isReverse = id.startsWith('rpk_');
+    run(() => (isReverse ? api.acceptReversePickup(id) : api.acceptOffer(id)).then(() => {
+      showToast(
+        isReverse ? 'Pickup accepted' : 'Order accepted',
+        isReverse ? 'Head to the customer to collect' : 'Head to the store to collect',
+        'check-circle',
+      );
     }));
   }, [run, showToast]);
 
   const rejectOffer = useCallback((id: string) => {
     setOffers(prev => prev.filter(o => o.id !== id));
-    run(() => api.rejectOffer(id));
+    run(() => (id.startsWith('rpk_') ? api.rejectReversePickup(id) : api.rejectOffer(id)));
   }, [run]);
 
   // ── forward transitions (optimistic UI + backend, then re-sync) ──
@@ -378,7 +398,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handedBack = useCallback((id: string) => {
     setOrderState(id, 'returned_to_store');
     showToast('Handed back to store', 'All items acknowledged', 'check-circle');
-    run(() => api.markReturned(id));
+    // Reverse-pickup handoff starts the store's verification window; forward
+    // returns finalize the order (auto-accepting door returns on arrival).
+    run(() => (id.startsWith('rpk_') ? api.deliverReversePickupToStore(id) : api.markReturned(id)));
   }, [setOrderState, showToast, run]);
 
   const abort = useCallback((id: string) => {
@@ -387,12 +409,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     run(() => api.returnToStore(id));
   }, [setOrderState, showToast, run]);
 
-  const collectReverse = useCallback((id: string) => {
-    // Reverse pickup is not wired to the backend yet (needs the reverse-pickup domain).
-    setOrderState(id, 'returning_to_store'); logEvent(id, 'reverse_collected');
+  const collectReverse = useCallback((id: string, otp?: string) => {
+    const photo = proofPhoto;
     setProofPhoto(null);
+    setOrderState(id, 'returning_to_store');
+    logEvent(id, 'reverse_collected');
     showToast('Item collected', 'Bring it to the store', 'package');
-  }, [setOrderState, logEvent, showToast]);
+    run(() => api.collectReversePickup(id, {
+      photos: photo ? [photo] : [],
+      ...(otp ? { otp } : {}),
+    }));
+  }, [proofPhoto, setOrderState, logEvent, showToast, run]);
 
   // ── Try-and-Buy door ──
   const arriveAtDoor = useCallback((id: string) => {
