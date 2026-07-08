@@ -142,6 +142,32 @@ export const collectReversePickup = (
 export const deliverReversePickupToStore = (id: string) =>
   apiPost(`/driver/reverse-pickups/${id}/deliver-to-store`);
 
+/* ── COD cash (append-only ledger; deposits confirmed by the ops desk) ──── */
+export type CashBalance = {
+  collectedTotalPaise: number;
+  depositedTotalPaise: number;
+  outstandingPaise: number;
+  pendingDepositPaise: number;
+  pendingDepositId: string | null;
+};
+export type CashDeposit = {
+  id: string;
+  amountPaise: number;
+  status: 'pending' | 'confirmed' | 'rejected' | string;
+  note: string | null;
+  adminNote: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+};
+export const cashBalance = () => apiGet<CashBalance>('/driver/cash/balance');
+export const listCashDeposits = () => apiGet<CashDeposit[]>('/driver/cash/deposits');
+/** Declare a deposit (defaults to full outstanding). Ledger moves on admin confirm. */
+export const requestCashDeposit = (body?: { amountPaise?: number; note?: string }) =>
+  apiPost<{ depositId: string; amountPaise: number; status: string }>(
+    '/driver/cash/deposits',
+    body ?? {},
+  );
+
 /* ── Location / earnings / profile ────────────────────────────────────── */
 export const pingLocation = (lat: number, lng: number) => apiPost('/driver/location', { lat, lng });
 export const earningsSummary = () => apiGet<EarningsSummary>('/driver/earnings/summary');

@@ -13,7 +13,7 @@ import { AGENT, TODAY, FAQS, ESCALATION, DOCUMENTS } from '../data/mockData';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { phone, driver, signOut, showConfirm, codCollected, depositCash, deliveredToday, orders } = useApp();
+  const { phone, driver, signOut, showConfirm, codCollected, cashPendingDeposit, depositCash, deliveredToday, orders } = useApp();
   const name = driver?.name || 'Driver';
   const vehicle = driver?.vehicleNumber
     ? `${driver.vehicleType ?? ''} ${driver.vehicleNumber}`.trim()
@@ -27,8 +27,10 @@ export default function ProfileScreen() {
 
   const deposit = () => showConfirm({
     title: 'Deposit cash?', icon: 'download',
-    msg: `Hand ₹${codCollected} to the ops desk. The app total will reset to zero after reconciliation.`,
-    confirmLabel: 'Deposit', onConfirm: depositCash,
+    msg: cashPendingDeposit > 0
+      ? `₹${cashPendingDeposit} is already awaiting ops confirmation.`
+      : `Declare ₹${codCollected} at the ops desk. The balance clears once ops confirms receipt.`,
+    confirmLabel: 'Request deposit', onConfirm: cashPendingDeposit > 0 ? undefined : depositCash,
   });
   const doSignOut = () => showConfirm({
     title: 'Sign out?', danger: true, icon: 'log-out',

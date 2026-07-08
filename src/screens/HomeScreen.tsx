@@ -34,14 +34,13 @@ function MiniStat({ icon, label }: { icon: any; label: string }) {
 
 export default function HomeScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { agent, driver, orders, deliveredToday, codCollected, depositCash, showConfirm } = useApp();
+  const { agent, driver, orders, deliveredToday, codCollected, cashPendingDeposit, depositCash, showConfirm } = useApp();
   const [earn, setEarn] = useState<EarningsSummary | null>(null);
   useEffect(() => {
     earningsSummary().then(setEarn).catch(() => {});
   }, []);
   const todayEarnings = earn ? rupeeP(earn.today.earningsPaise) : rupee(TODAY.earnings);
   const todayDelivered = earn ? earn.today.deliveries : deliveredToday;
-  const todayCod = earn ? earn.today.codCollectedPaise / 100 : codCollected;
 
   const active = orders.filter((o) => o.method !== 'REVERSE_PICKUP' && isActive(o));
   const hour = new Date().getHours();
@@ -51,8 +50,8 @@ export default function HomeScreen({ navigation }: any) {
   const deposit = () =>
     showConfirm({
       title: 'Deposit cash?',
-      msg: `Hand ${rupee(codCollected)} to the store cashier, then confirm.`,
-      confirmLabel: 'Deposited',
+      msg: `Declare ${rupee(codCollected)} at the ops desk. The balance clears once ops confirms receipt.`,
+      confirmLabel: 'Request deposit',
       icon: 'credit-card',
       onConfirm: depositCash,
     });
@@ -105,16 +104,24 @@ export default function HomeScreen({ navigation }: any) {
           <StatTile style={{ flex: 1 }} label="On-time" value={`${TODAY.onTimePct}%`} sub={`${TODAY.acceptancePct}% accepted`} />
         </View>
 
-        {/* COD to deposit */}
+        {/* COD outstanding (ledger-backed) */}
         <BrutalCard style={{ marginTop: SP.m, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.mute, alignItems: 'center', justifyContent: 'center' }}>
             <MaterialCommunityIcons name="currency-inr" size={20} color={C.ink} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={T.label}>Cash collected today</Text>
-            <Text style={[T.h2, { marginTop: 2 }]}>{rupee(todayCod)}</Text>
+            <Text style={T.label}>COD cash with you</Text>
+            <Text style={[T.h2, { marginTop: 2 }]}>{rupee(codCollected)}</Text>
+            {cashPendingDeposit > 0 && (
+              <Text style={T.caption}>{rupee(cashPendingDeposit)} awaiting ops confirmation</Text>
+            )}
           </View>
-          <BrutalButton label="Deposit" small disabled={todayCod <= 0} onPress={deposit} />
+          <BrutalButton
+            label={cashPendingDeposit > 0 ? 'Pending' : 'Deposit'}
+            small
+            disabled={codCollected <= 0 || cashPendingDeposit > 0}
+            onPress={deposit}
+          />
         </BrutalCard>
 
         {/* Active now */}

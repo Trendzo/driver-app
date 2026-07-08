@@ -91,8 +91,9 @@ type AppCtx = {
   addExtension: (id: string) => void;
   closeDoor: (id: string, otp?: string) => void;  // apply close rules -> delivered | returning_to_store
 
-  // ── COD running total ──
+  // ── COD cash (ledger-backed): outstanding in ₹ + a pending desk deposit ──
   codCollected: number;
+  cashPendingDeposit: number;
   depositCash: () => void;
 
   // ── mandatory-photo capture (camera returns here) ──
@@ -129,6 +130,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [handoffCodes, setHandoffCodes] = useState<Record<string, string | null>>({});
   const [door, setDoor] = useState<Record<string, DoorState>>({});
   const [codCollected, setCodCollected] = useState(TODAY.codCollected);
+  const [cashPendingDeposit, setCashPendingDeposit] = useState(0);
   const [deliveredToday, setDeliveredToday] = useState(TODAY.delivered);
   const [proofPhoto, setProofPhoto] = useState<string | null>(null);
   const [night, setNightState] = useState(false);
@@ -224,6 +226,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const getOrder = useCallback((id: string) => orders.find(o => o.id === id), [orders]);
 
+  // Ledger truth for the cash tiles: outstanding = collected − confirmed deposits.
+  const refreshCash = useCallback(async () => {
+    try {
+      const b = await api.cashBalance();
+      setCodCollected(Math.round(b.outstandingPaise / 100));
+      setCashPendingDeposit(Math.round(b.pendingDepositPaise / 100));
+    } catch {
+      // transient — keep the last snapshot
+    }
+  }, []);
+
   // ── Fetch assigned work from the backend (periodic + after mutations):
   //    forward deliveries + reverse-pickup tasks, merged into one queue. ──
   const refresh = useCallback(async () => {
@@ -239,7 +252,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Transient (offline / expired) — keep the last snapshot; a 401 already signs out.
     }
-  }, []);
+    void refreshCash();
+  }, [refreshCash]);
 
   useEffect(() => {
     if (!token) { setOrders([]); setHandoffCodes({}); return; }
@@ -484,11 +498,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     run(() => api.doorClose(id, items, otp));
   }, [orders, door, setOrderState, showToast, run]);
 
+  // Declare the deposit at the ops desk. The outstanding amount stays until an
+  // admin confirms receipt of the physical cash — only then the ledger moves.
   const depositCash = useCallback(() => {
-    setCodCollected(0);
-    logEvent('—', 'cash_deposited');
-    showToast('Cash deposited', 'Reconciled with ops', 'check-circle');
-  }, [logEvent, showToast]);
+    logEvent('—', 'cash_deposit_requested');
+    run(() => api.requestCashDeposit().then((r) => {
+      setCashPendingDeposit(Math.round(r.amountPaise / 100));
+      showToast('Deposit requested', 'Hand the cash to the ops desk for confirmation', 'clock');
+    }));
+  }, [logEvent, run, showToast]);
 
   const showConfirm = useCallback((c: NonNullable<Confirm>) => setConfirm(c), []);
   const hideConfirm = useCallback(() => setConfirm(null), []);
@@ -501,13 +519,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     startDelivery, markDelivered, markUndelivered, retryDelivery,
     returnToStore, handedBack, abort, collectReverse,
     door, arriveAtDoor, decideItem, addExtension, closeDoor,
-    codCollected, depositCash,
+    codCollected, cashPendingDeposit, depositCash,
     proofPhoto, setProofPhoto,
     deliveredToday,
     night, toggleNight,
     toast, showToast, hideToast,
     confirm, showConfirm, hideConfirm,
-  }), [phone, token, driver, signupMode, signIn, signOut, completeProfile, onboarded, setOnboarded, orders, getOrder, refresh, handoffCodeFor, offers, acceptOffer, rejectOffer, startDelivery, markDelivered, markUndelivered, retryDelivery, returnToStore, handedBack, abort, collectReverse, door, arriveAtDoor, decideItem, addExtension, closeDoor, codCollected, depositCash, proofPhoto, deliveredToday, night, toggleNight, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
+  }), [phone, token, driver, signupMode, signIn, signOut, completeProfile, onboarded, setOnboarded, orders, getOrder, refresh, handoffCodeFor, offers, acceptOffer, rejectOffer, startDelivery, markDelivered, markUndelivered, retryDelivery, returnToStore, handedBack, abort, collectReverse, door, arriveAtDoor, decideItem, addExtension, closeDoor, codCollected, cashPendingDeposit, depositCash, proofPhoto, deliveredToday, night, toggleNight, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
