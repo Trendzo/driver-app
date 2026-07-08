@@ -84,6 +84,8 @@ export type Order = {
   pickupItem?: string;
   // minutes target for the headline timer on the delivery card
   targetMin: number;
+  // ISO timestamp the order was placed — used to sort the deliveries list (newest first).
+  placedAt?: string;
 };
 
 // ─── TRACK POINTS — progress steps differ PER delivery method ──

@@ -46,7 +46,7 @@ export default function DoorScreen() {
   // when a photo comes back, advance the pending decision
   useEffect(() => {
     if (!proofPhoto) return;
-    if (closing) { setClosing(false); setProofPhoto(null); closeDoor(id, otpRef.current.trim() || undefined); nav.goBack(); return; }
+    if (closing) { setClosing(false); setProofPhoto(null); closeDoor(id, otpRef.current.trim() || undefined); nav.popToTop(); return; }
     if (pending) {
       const p = pending; setPending(null); setProofPhoto(null);
       if (p.needsReason) setReasonFor({ itemId: p.itemId, decision: p.decision });
@@ -72,7 +72,7 @@ export default function DoorScreen() {
   const allReturned = effective.every(d => d === 'returned' || d === 'store_decides');
   const onClose = () => {
     if (allReturned) { setClosing(true); camera('Full return', 'Photograph the whole bag before leaving'); }
-    else { closeDoor(id, otpRef.current.trim() || undefined); nav.goBack(); }
+    else { closeDoor(id, otpRef.current.trim() || undefined); nav.popToTop(); }
   };
 
   return (
@@ -154,7 +154,7 @@ export default function DoorScreen() {
         </Text>
         <BrutalButton label="Close door" icon="check-square" big block disabled={otp.trim().length === 0} onPress={onClose} />
         <View style={{ height: SP.s }} />
-        <BrutalButton label="Couldn't deliver · customer not found" variant="outline" icon="phone-off" block onPress={() => setUndelivModal(true)} />
+        <BrutalButton label="Couldn't deliver" variant="outline" icon="phone-off" block onPress={() => setUndelivModal(true)} />
       </View>
 
       {/* inspection sheet */}
@@ -219,7 +219,7 @@ export default function DoorScreen() {
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginBottom: 4 }}>Couldn't deliver</Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginBottom: SP.m }}>Why? The order is logged as undelivered.</Text>
             {UNDELIVERED_REASONS.map(r => (
-              <Pressable key={r} onPress={() => { setUndelivModal(false); markUndelivered(id, r); nav.goBack(); }} style={[{ padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>
+              <Pressable key={r} onPress={() => { setUndelivModal(false); markUndelivered(id, r); nav.popToTop(); }} style={[{ padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: C.ink }}>{r}</Text>
               </Pressable>
             ))}

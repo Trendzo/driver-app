@@ -18,6 +18,10 @@ export default function ProfileScreen() {
   const vehicle = driver?.vehicleNumber
     ? `${driver.vehicleType ?? ''} ${driver.vehicleNumber}`.trim()
     : AGENT.vehicle;
+  const zone = driver?.city || AGENT.zone;
+  const joined = driver?.createdAt
+    ? new Date(driver.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+    : AGENT.joinedOn;
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const pending = orders.filter(o => !['delivered', 'returned_to_store'].includes(o.state)).length;
 
@@ -53,7 +57,7 @@ export default function ProfileScreen() {
           </View>
           <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: SP.m, padding: SP.s, backgroundColor: C.mute }, BORDER(1)]}>
             <Feather name="map" size={13} color={C.ink} />
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, flex: 1 }}>{AGENT.zone}</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, flex: 1 }}>{zone}</Text>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: C.dim }}>{AGENT.shift}</Text>
           </View>
         </View>
@@ -61,7 +65,7 @@ export default function ProfileScreen() {
           {/* agent details */}
           <Section title="DETAILS" />
           <Detail icon="truck" label="Vehicle" value={vehicle} />
-          <Detail icon="calendar" label="Joined" value={AGENT.joinedOn} />
+          <Detail icon="calendar" label="Joined" value={joined} />
           {DOCUMENTS.map(d => (
             <Detail key={d.name} icon={d.icon} label={d.name} value={d.sub} tag={d.status} />
           ))}

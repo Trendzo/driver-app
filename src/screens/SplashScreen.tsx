@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Dimensions, StatusBar, StyleSheet, View } from 'react-native';
 import { MotiView } from 'moti';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -27,10 +27,15 @@ export default function SplashScreen({ onDone }: { onDone: () => void }) {
   }));
   const fillStyle = useAnimatedStyle(() => ({ width: p.value * barW }));
 
+  // Fire exactly once — `onDone` is a new closure each render, so keep it in a ref and give
+  // the effect empty deps. Otherwise any re-render (auth hydrate, offers poll, toasts…) would
+  // reset the timer and the splash would never advance.
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
   useEffect(() => {
-    const t = setTimeout(onDone, 2600);
+    const t = setTimeout(() => doneRef.current(), 2600);
     return () => clearTimeout(t);
-  }, [onDone]);
+  }, []);
 
   return (
     <View

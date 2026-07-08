@@ -1,9 +1,10 @@
-// Delivery-proof photo capture. The rider snaps a photo of the handed-over
-// order / doorstep; it's stored on the active delivery as proof. Uses
-// expo-camera (bundled in Expo Go). Gracefully handles permission denial.
+// Delivery-proof photo capture. Snap → PREVIEW the shot with an upload state (uploading /
+// failed-retry) instead of sitting on the live camera. On success the hosted URL is stored
+// and we return; on failure the driver can retry the upload or retake.
 import React, { useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -16,32 +17,48 @@ export default function ProofCameraScreen() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation<any>();
   const route = useRoute<any>();
-  // Caller passes what the photo is FOR — drives the on-screen guidance.
   const title: string = route.params?.title ?? 'Delivery proof';
   const hint: string = route.params?.hint ?? 'Show the order at the doorstep';
   const { setProofPhoto, showToast } = useApp();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
-  const [busy, setBusy] = useState(false);
+
+  const [shooting, setShooting] = useState(false);      // shutter → capture in flight
+  const [captured, setCaptured] = useState<string | null>(null); // local uri to preview
+  const [uploading, setUploading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const doUpload = async (uri: string) => {
+    setUploading(true);
+    setFailed(false);
+    try {
+      const url = await uploadPhoto(uri);
+      setProofPhoto(url);
+      showToast('Proof captured', 'Photo attached to this delivery', 'camera');
+      nav.goBack();
+    } catch {
+      setUploading(false);
+      setFailed(true);
+    }
+  };
 
   const capture = async () => {
-    if (!cameraRef.current || busy) return;
-    setBusy(true);
+    if (!cameraRef.current || shooting) return;
+    setShooting(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.5, skipProcessing: true });
       if (photo?.uri) {
-        // Upload to Cloudinary so we store a hosted URL (the backend rejects local file uris).
-        const url = await uploadPhoto(photo.uri);
-        setProofPhoto(url);
-        showToast('Proof captured', 'Photo attached to this delivery', 'camera');
-        nav.goBack();
+        setCaptured(photo.uri);      // switch to preview immediately
+        void doUpload(photo.uri);    // start uploading
       }
     } catch {
-      showToast('Upload failed', 'Could not save the photo, try again', 'camera-off');
+      showToast('Camera error', 'Could not take the photo, try again', 'camera-off');
     } finally {
-      setBusy(false);
+      setShooting(false);
     }
   };
+
+  const retake = () => { setCaptured(null); setFailed(false); setUploading(false); };
 
   // permission still loading
   if (!permission) {
@@ -68,6 +85,48 @@ export default function ProofCameraScreen() {
     );
   }
 
+  // ── PREVIEW + upload state ──
+  if (captured) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000' }}>
+        <BrutalStatusBar light />
+        <Image source={{ uri: captured }} style={StyleSheet.absoluteFill} contentFit="contain" />
+
+        {/* top bar */}
+        <View style={{ position: 'absolute', top: insets.top + 8, left: SP.l, right: SP.l, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Pressable onPress={() => nav.goBack()} hitSlop={10} disabled={uploading} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: C.white, opacity: uploading ? 0.5 : 1 }}>
+            <Feather name="x" size={20} color={C.ink} />
+          </Pressable>
+          <View style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: C.white, borderRadius: 999 }}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>{title}</Text>
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
+
+        {/* bottom state panel */}
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: SP.l, paddingTop: SP.l, paddingBottom: insets.bottom + 20, backgroundColor: 'rgba(0,0,0,0.75)' }}>
+          {uploading ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 6 }}>
+              <ActivityIndicator color="#fff" />
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: '#fff', letterSpacing: 0.5 }}>Uploading…</Text>
+            </View>
+          ) : failed ? (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: SP.m }}>
+                <Feather name="alert-triangle" size={16} color={C.stop} />
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: '#fff' }}>Upload failed</Text>
+              </View>
+              <BrutalButton label="Retry upload" icon="upload-cloud" big block onPress={() => doUpload(captured)} />
+              <View style={{ height: SP.s }} />
+              <BrutalButton label="Retake" variant="outline" icon="rotate-ccw" block onPress={retake} />
+            </>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
+  // ── LIVE camera ──
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <BrutalStatusBar light />
@@ -94,10 +153,10 @@ export default function ProofCameraScreen() {
 
       {/* shutter */}
       <View style={{ position: 'absolute', bottom: insets.bottom + 30, left: 0, right: 0, alignItems: 'center' }}>
-        <Pressable onPress={capture} disabled={busy} style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' }}>
-          <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: busy ? C.faint : '#fff' }} />
+        <Pressable onPress={capture} disabled={shooting} style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' }}>
+          <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: shooting ? C.faint : '#fff' }} />
         </Pressable>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: '#fff', letterSpacing: 1, marginTop: 12 }}>{busy ? 'SAVING…' : 'TAP TO CAPTURE'}</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: '#fff', letterSpacing: 1, marginTop: 12 }}>{shooting ? 'CAPTURING…' : 'TAP TO CAPTURE'}</Text>
       </View>
     </View>
   );

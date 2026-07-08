@@ -38,7 +38,19 @@ export default function OrderDetailScreen() {
   }, [proofPhoto, captureFor]);
 
   if (!o) {
-    return <View style={{ flex: 1, backgroundColor: C.bg }}><ScreenHeader title="Order" onBack={() => nav.goBack()} /></View>;
+    // The order left the active list (delivered / returned) — show a done state, not a blank page.
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <ScreenHeader title="Order" onBack={() => nav.popToTop()} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: SP.l, gap: 6 }}>
+          <Feather name="check-circle" size={44} color={C.faint} />
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 19, color: C.ink, marginTop: 10 }}>Order completed</Text>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, textAlign: 'center' }}>This order is no longer active.</Text>
+          <View style={{ height: SP.m }} />
+          <BrutalButton label="Back to deliveries" icon="arrow-left" onPress={() => nav.popToTop()} />
+        </View>
+      </View>
+    );
   }
 
   const isReverse = o.method === 'REVERSE_PICKUP';

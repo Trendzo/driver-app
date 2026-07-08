@@ -44,6 +44,7 @@ export type DriverProfile = {
   vehicleNumber: string | null;
   city: string | null;
   status: string;
+  createdAt?: string;
   profileComplete?: boolean;
 };
 

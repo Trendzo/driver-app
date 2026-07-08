@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "com.trendzo.partner",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
@@ -40,6 +41,14 @@
     },
     "plugins": [
       "expo-font",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "ios": { "useFrameworks": "static" }
+        }
+      ],
       [
         "expo-camera",
         {

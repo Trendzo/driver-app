@@ -40,6 +40,7 @@ export function toOrder(d: BackendDelivery): Order {
     payment: isCod ? 'COD' : 'PREPAID',
     codAmount: Math.round(codPaise / 100),
     targetMin: TARGET_MIN[method],
+    placedAt: d.placedAt,
     store: {
       name: d.storeNameSnap,
       addr: d.storeAddressSnap ?? '',

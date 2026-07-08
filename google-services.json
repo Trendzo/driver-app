@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "335992655902",
+    "project_id": "trendzo-85e49",
+    "storage_bucket": "trendzo-85e49.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:335992655902:android:6adefb1ac84476b4f39e0f",
+        "android_client_info": {
+          "package_name": "com.trendzo.partner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3lAw0V0xPK8DpUPfsLFR9-UhrEtFDvOs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

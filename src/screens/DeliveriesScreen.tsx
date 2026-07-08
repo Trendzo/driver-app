@@ -12,6 +12,9 @@ import { MethodBadge, Countdown, TargetChip, ProgressTrack } from '../components
 import { useApp, isActive } from '../state/AppState';
 import { Order, STATE_LABEL, METHOD_LABEL } from '../data/mockData';
 
+// Compact, non-leaking order id for the card header.
+const shortId = (id: string) => '#' + id.replace(/^ord_/, '').slice(0, 8);
+
 // What the agent should do next, per state — drives the card's footer hint.
 function nextAction(o: Order): string {
   switch (o.state) {
@@ -36,9 +39,9 @@ function DeliveryCard({ o }: { o: Order }) {
     <Pressable onPress={open} style={[{ backgroundColor: C.white, marginBottom: SP.m }, BORDER(1)]}>
       {/* top row: id + method + timer */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SP.m, gap: 8 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
           <MethodBadge method={o.method} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim, flexShrink: 1 }}>{shortId(o.id)}</Text>
         </View>
         {o.state === 'at_door' && doorState ? <Countdown endsAt={doorState.endsAt} /> : <TargetChip minutes={o.targetMin} />}
       </View>
@@ -80,9 +83,9 @@ function OfferCard({ o }: { o: Order }) {
   return (
     <View style={[{ backgroundColor: C.white, marginBottom: SP.m }, BORDER(1)]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SP.m, gap: 8 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
           <MethodBadge method={o.method} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim, flexShrink: 1 }}>{shortId(o.id)}</Text>
         </View>
         {o.payment === 'COD' && (
           <View style={{ paddingHorizontal: 9, paddingVertical: 3, backgroundColor: C.ink, borderRadius: 999 }}>
@@ -115,10 +118,14 @@ function OfferCard({ o }: { o: Order }) {
 
 export default function DeliveriesScreen() {
   const insets = useSafeAreaInsets();
-  const { agent, orders, offers } = useApp();
-  // forward deliveries only (reverse pickups live on the Returns tab)
-  const active = orders.filter(o => o.method !== 'REVERSE_PICKUP' && isActive(o));
-  const available = offers.filter(o => o.method !== 'REVERSE_PICKUP');
+  const { agent, driver, orders, offers } = useApp();
+  // forward deliveries only (reverse pickups live on the Returns tab), newest first.
+  const active = orders
+    .filter(o => o.method !== 'REVERSE_PICKUP' && isActive(o))
+    .sort((a, b) => (b.placedAt ?? '').localeCompare(a.placedAt ?? ''));
+  const available = offers
+    .filter(o => o.method !== 'REVERSE_PICKUP')
+    .sort((a, b) => (b.placedAt ?? '').localeCompare(a.placedAt ?? ''));
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -128,7 +135,7 @@ export default function DeliveriesScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: C.ink, letterSpacing: -0.5 }}>Deliveries</Text>
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, marginTop: 2 }}>{agent.zone} · {agent.shift}</Text>
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, marginTop: 2 }}>{driver?.city || agent.zone} · {agent.shift}</Text>
           </View>
           <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: C.ink, borderRadius: 999, alignItems: 'center' }}>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.white }}>{active.length}</Text>
@@ -138,25 +145,26 @@ export default function DeliveriesScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: SP.l, paddingBottom: insets.bottom + 90 }} showsVerticalScrollIndicator={false}>
+        {active.length > 0 && (
+          <>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: SP.m }}>Active now</Text>
+            {active.map(o => <DeliveryCard key={o.id} o={o} />)}
+            {available.length > 0 && <View style={{ height: SP.m }} />}
+          </>
+        )}
         {available.length > 0 && (
           <>
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: SP.m }}>Available to accept</Text>
             {available.map(o => <OfferCard key={o.id} o={o} />)}
-            <View style={{ height: SP.m }} />
           </>
         )}
-        {active.length === 0 && available.length === 0 ? (
+        {active.length === 0 && available.length === 0 && (
           <View style={{ alignItems: 'center', paddingVertical: 80 }}>
             <Feather name="check-circle" size={44} color={C.faint} />
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 19, color: C.ink, marginTop: 16 }}>All clear</Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginTop: 4, textAlign: 'center' }}>No deliveries right now.{'\n'}New orders appear here to accept.</Text>
           </View>
-        ) : active.length > 0 ? (
-          <>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.dim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: SP.m }}>Active now</Text>
-            {active.map(o => <DeliveryCard key={o.id} o={o} />)}
-          </>
-        ) : null}
+        )}
       </ScrollView>
     </View>
   );

@@ -15,3 +15,7 @@ export const MSG91_TOKEN_AUTH =
   (process.env.EXPO_PUBLIC_MSG91_TOKEN_AUTH as string | undefined) ?? '547225TSvi20QFa026a47d90aP1';
 
 export const OTP_LENGTH = 4;
+
+// Offers delivery: long-poll is primary for now. Flip to true (after an FCM-enabled build +
+// the backend FIREBASE_SERVICE_ACCOUNT) to prefer push, with long-poll as the fallback.
+export const USE_FCM_OFFERS = false;

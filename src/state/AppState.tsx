@@ -17,6 +17,9 @@ import { setNight as applyNight } from '../theme/brutal';
 import { setAuthToken, setOnUnauthorized } from '../api/session';
 import { isApiError } from '../api/errors';
 import { toOrder } from '../api/adapter';
+import * as Location from 'expo-location';
+import { initFcm, teardownFcm } from '../fcm';
+import { USE_FCM_OFFERS } from '../config/env';
 import * as api from '../api';
 import type { DriverProfile, DoorItemDecision } from '../api';
 
@@ -240,23 +243,69 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(t);
   }, [token, refresh]);
 
-  // ── Broadcast offers via LONG-POLL: the request parks on the server until an offer
-  //    appears (or ~25s), then we apply it and immediately re-request — near-instant. ──
+  // ── Broadcast offers: FCM push preferred (instant, no held connection); LONG-POLL is the
+  //    fallback when FCM is unavailable (no Play services / denied / non-FCM build). ──
   useEffect(() => {
     if (!token) { setOffers([]); return; }
     let cancelled = false;
-    (async function loop() {
-      while (!cancelled) {
-        try {
-          const rows = await api.longPollOffers(25000);
-          if (!cancelled) setOffers(rows.map(toOrder));
-        } catch {
-          if (cancelled) break;
-          await new Promise((r) => setTimeout(r, 3000)); // backoff on network error
-        }
+    let stop = () => {};
+
+    const refreshOffers = async () => {
+      try {
+        const rows = await api.listOffers();
+        if (!cancelled) setOffers(rows.map(toOrder));
+      } catch {
+        // transient; a 401 already signs out
+      }
+    };
+
+    (async () => {
+      const fcmActive = USE_FCM_OFFERS ? await initFcm(refreshOffers) : false;
+      if (cancelled) { void teardownFcm(); return; }
+      if (fcmActive) {
+        // Push drives updates; a slow safety refresh catches any missed push.
+        await refreshOffers();
+        const t = setInterval(refreshOffers, 45000);
+        stop = () => clearInterval(t);
+      } else {
+        // Long-poll fallback: park on the server until an offer appears, then re-request.
+        let loopCancelled = false;
+        (async function loop() {
+          while (!loopCancelled) {
+            try {
+              const rows = await api.longPollOffers(25000);
+              if (!loopCancelled) setOffers(rows.map(toOrder));
+            } catch {
+              if (loopCancelled) break;
+              await new Promise((r) => setTimeout(r, 3000));
+            }
+          }
+        })();
+        stop = () => { loopCancelled = true; };
       }
     })();
-    return () => { cancelled = true; };
+
+    return () => { cancelled = true; stop(); void teardownFcm(); };
+  }, [token]);
+
+  // ── Live location: ping the backend while on shift so the admin dispatch map is current. ──
+  useEffect(() => {
+    if (!token) return;
+    let sub: Location.LocationSubscription | null = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted' || cancelled) return;
+        sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, timeInterval: 60000, distanceInterval: 100 },
+          (pos) => { void api.pingLocation(pos.coords.latitude, pos.coords.longitude).catch(() => {}); },
+        );
+      } catch {
+        // permission denied / location off → admin map just shows no last-known point
+      }
+    })();
+    return () => { cancelled = true; sub?.remove(); };
   }, [token]);
 
   const handoffCodeFor = useCallback((id: string) => handoffCodes[id] ?? null, [handoffCodes]);
