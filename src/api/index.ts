@@ -67,6 +67,14 @@ export type BackendReversePickup = {
   addressLng: number | null;
   itemsLabel: string;
   collectedPhotos: string[];
+  /**
+   * Cash the driver must hand BACK to the customer at collection (COD refunds).
+   * 0 for prepaid orders. Server-computed and server-enforced — the collect call is
+   * rejected unless the confirmed amount matches this exactly, so the driver attests
+   * to it rather than choosing it.
+   */
+  cashRefundDuePaise: number;
+  cashHandedPaise: number | null;
   createdAt: string;
   assignedAt: string | null;
   collectedAt: string | null;
@@ -136,7 +144,7 @@ export const rejectReversePickup = (id: string) =>
 /** Collected at the door — consumer-spoken OTP + ≥1 photo of the goods. */
 export const collectReversePickup = (
   id: string,
-  body: { otp?: string; photos: string[]; note?: string },
+  body: { otp?: string; photos: string[]; note?: string; cashHandedPaise?: number },
 ) => apiPost(`/driver/reverse-pickups/${id}/collect`, body);
 /** Handed to the store — starts the store's verification window. */
 export const deliverReversePickupToStore = (id: string) =>

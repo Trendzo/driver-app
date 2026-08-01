@@ -10,6 +10,7 @@ import { C, SP, BORDER, ASCII } from '../theme/brutal';
 import { BrutalStatusBar, AsciiDivider } from '../components/Brutal';
 import { MethodBadge, Countdown, TargetChip, ProgressTrack } from '../components/DeliveryBits';
 import { useApp, isActive } from '../state/AppState';
+import { formatPaise } from '../utils/money';
 import { Order, STATE_LABEL, METHOD_LABEL } from '../data/mockData';
 
 // Compact, non-leaking order id for the card header.
@@ -57,6 +58,13 @@ function DeliveryCard({ o }: { o: Order }) {
           {o.payment === 'COD' && (
             <View style={{ marginLeft: 'auto', paddingHorizontal: 9, paddingVertical: 3, backgroundColor: C.ink, borderRadius: 999 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.white }}>COD ₹{o.codAmount}</Text>
+            </View>
+          )}
+          {/* Cash to hand BACK on a COD return — the driver must be carrying it before
+              they set off, so it belongs on the list card, not just the detail screen. */}
+          {!!o.cashRefundDuePaise && (
+            <View style={{ marginLeft: 'auto', paddingHorizontal: 9, paddingVertical: 3, backgroundColor: C.ink, borderRadius: 999 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.white }}>{`CARRY ${formatPaise(o.cashRefundDuePaise)}`}</Text>
             </View>
           )}
         </View>

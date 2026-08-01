@@ -333,7 +333,10 @@ export function BrutalToast({ toast, onHide }: { toast: { title: string; msg?: s
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: '#fff' }}>{toast.title}</Text>
-          {toast.msg && <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 1 }} numberOfLines={1}>{toast.msg}</Text>}
+          {/* Up to 3 lines: server rejections carry real instructions ("Hand ₹X in cash
+              to the customer and confirm the exact amount") that a single clipped line
+              would swallow. */}
+          {toast.msg && <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 1 }} numberOfLines={3}>{toast.msg}</Text>}
         </View>
       </Pressable>
     </Animated.View>

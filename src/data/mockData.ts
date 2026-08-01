@@ -77,6 +77,13 @@ export type Order = {
   state: OrderState;
   payment: Payment;
   codAmount: number;        // cash to collect if COD, else 0 (always 0 for Try-and-Buy)
+  /**
+   * REVERSE_PICKUP only: cash to hand BACK to the customer when collecting their return
+   * (a COD order is refunded in cash). Deliberately separate from `codAmount` — cash out
+   * is not cash in, and folding them together would corrupt the "COD cash with you"
+   * figure on Home.
+   */
+  cashRefundDuePaise?: number;
   store: { name: string; addr: string; phone: string; coord: LatLng; distanceKm: number };
   customer: { name: string; addr: string; landmark?: string; phone: string; coord: LatLng; distanceKm: number };
   items: OrderItem[];

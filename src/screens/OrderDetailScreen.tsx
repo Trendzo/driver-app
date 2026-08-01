@@ -11,6 +11,7 @@ import { C, SP, BORDER, ASCII } from '../theme/brutal';
 import { BrutalStatusBar, ScreenHeader, SwipeToConfirm, BrutalButton, MapPanel, BrutalInput, AsciiDivider } from '../components/Brutal';
 import { MethodBadge, PolicyBadge } from '../components/DeliveryBits';
 import { useApp } from '../state/AppState';
+import { formatPaise } from '../utils/money';
 import { STATE_LABEL, METHOD_LABEL, UNDELIVERED_REASONS } from '../data/mockData';
 
 export default function OrderDetailScreen() {
@@ -29,9 +30,11 @@ export default function OrderDetailScreen() {
   const [reasonModal, setReasonModal] = useState(false);
   const [cod, setCod] = useState('');
   const [otp, setOtp] = useState(''); // consumer delivery OTP (door deliveries carry one)
+  // Cash-refund handover ack (COD reverse pickups). Reset per order alongside the photo.
+  const [cashAcked, setCashAcked] = useState(false);
 
   // fresh photo gate every time we open a delivery
-  useEffect(() => { setProofPhoto(null); }, [id]);
+  useEffect(() => { setProofPhoto(null); setCashAcked(false); }, [id]);
   // returning from the location photo → ask for the not-home reason
   useEffect(() => {
     if (proofPhoto && captureFor === 'location') { setReasonModal(true); }
@@ -100,14 +103,59 @@ export default function OrderDetailScreen() {
   const renderAction = () => {
     if (isReverse) {
       if (o.state === 'out_for_delivery') {
-        // Backend proof: ≥1 photo of the goods + the customer's return OTP.
+        // Backend proof: ≥1 photo of the goods + the customer's return OTP. And when the
+        // order was cash-on-delivery, the refund is paid back in CASH at this same visit
+        // — hand it over before you take the items.
+        const cashDue = o.cashRefundDuePaise ?? 0;
+        const ready = !!proofPhoto && otp.trim().length > 0 && (cashDue === 0 || cashAcked);
         return (
           <>
+            {cashDue > 0 && (
+              <>
+                <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: SP.m, marginBottom: SP.s, backgroundColor: C.ink }, BORDER(1)]}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 26, color: C.white }}>₹</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: C.white }}>
+                      {`Hand back ${formatPaise(cashDue)} cash`}
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.white, opacity: 0.8 }}>
+                      This was a cash order — give the refund before you take the items
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  onPress={() => setCashAcked(v => !v)}
+                  style={[{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: SP.m, marginBottom: SP.s, backgroundColor: cashAcked ? C.ink : C.white }, BORDER(1)]}
+                >
+                  <View style={[{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: C.white }, BORDER(1)]}>
+                    {cashAcked && <Feather name="check" size={14} color={C.ink} />}
+                  </View>
+                  <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 15, color: cashAcked ? C.white : C.ink }}>
+                    {`I handed ${formatPaise(cashDue)} in cash to the customer`}
+                  </Text>
+                </Pressable>
+              </>
+            )}
             <PhotoRow photo={proofPhoto} label="Item photo (required)" onTake={() => openCamera('reverse')} />
             <View style={{ marginBottom: SP.s }}>
               <BrutalInput value={otp} onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 8))} label="Customer's return OTP" placeholder="Ask the customer" keyboardType="number-pad" />
             </View>
-            <SwipeToConfirm label="Confirm pickup" icon="package" disabled={!proofPhoto || otp.trim().length === 0} onConfirm={() => { collectReverse(o.id, otp.trim()); nav.goBack(); }} />
+            {cashDue > 0 && !cashAcked && (
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, textAlign: 'center', marginBottom: SP.s }}>
+                Confirm the cash handover before you collect
+              </Text>
+            )}
+            <SwipeToConfirm
+              label={cashDue > 0 ? `Hand ${formatPaise(cashDue)} + collect` : 'Confirm pickup'}
+              icon="package"
+              disabled={!ready}
+              onConfirm={async () => {
+                // Only leave the screen if the server accepted it. A rejected cash amount
+                // has to stay readable and retryable — the driver is holding the money.
+                const done = await collectReverse(o.id, otp.trim(), cashDue > 0 ? cashDue : undefined);
+                if (done) nav.goBack();
+              }}
+            />
           </>
         );
       }

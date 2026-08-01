@@ -88,6 +88,8 @@ export function toReverseOrder(t: BackendReversePickup): Order {
     state: REVERSE_STATE[t.status] ?? 'out_for_delivery',
     payment: 'PREPAID',
     codAmount: 0,
+    // Cash OUT, not cash in — see the Order type note.
+    cashRefundDuePaise: t.cashRefundDuePaise ?? 0,
     targetMin: TARGET_MIN.REVERSE_PICKUP,
     placedAt: t.createdAt,
     pickupItem: t.itemsLabel,

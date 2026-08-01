@@ -82,7 +82,8 @@ type AppCtx = {
   abort: (id: string) => void;                // mid-delivery -> returning_to_store
 
   // ── reverse pickup (OTP + item photo proof; photo comes from proofPhoto) ──
-  collectReverse: (id: string, otp?: string) => void;  // assigned -> collected
+  /** assigned -> collected. Awaitable: resolves false when the server rejected it. */
+  collectReverse: (id: string, otp?: string, cashHandedPaise?: number) => Promise<boolean>;
 
   // ── Try-and-Buy door ──
   door: Record<string, DoorState>;
@@ -423,17 +424,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     run(() => api.returnToStore(id));
   }, [setOrderState, showToast, run]);
 
-  const collectReverse = useCallback((id: string, otp?: string) => {
+  /**
+   * Collect a return at the customer's door.
+   *
+   * AWAITABLE and non-optimistic, unlike the other actions here. Cash may change hands
+   * on this call: a COD return is refunded as physical notes handed over at collection,
+   * and the server rejects any amount that isn't an exact match. If we flipped state and
+   * navigated away first, a rejection would land as a 2.4s truncated toast on a screen
+   * the driver had already left, with the optimistic flip silently reverted — the driver
+   * would believe the pickup succeeded. So: call first, and only claim success on success.
+   *
+   * Returns true when the server accepted it.
+   */
+  const collectReverse = useCallback(async (
+    id: string,
+    otp?: string,
+    cashHandedPaise?: number,
+  ): Promise<boolean> => {
     const photo = proofPhoto;
+    // The server requires at least one photo; the screen's disabled prop was the only
+    // thing preventing a guaranteed 422. Guard here too, where the payload is built.
+    if (!photo) {
+      showToast('Photo required', 'Take a photo of the items you are collecting', 'camera');
+      return false;
+    }
+    try {
+      await api.collectReversePickup(id, {
+        photos: [photo],
+        ...(otp ? { otp } : {}),
+        ...(cashHandedPaise ? { cashHandedPaise } : {}),
+      });
+    } catch (e) {
+      // Stay on the screen so the driver can fix it and retry.
+      showToast('Could not collect', isApiError(e) ? e.message : 'Please try again', 'alert-circle');
+      refresh();
+      return false;
+    }
     setProofPhoto(null);
     setOrderState(id, 'returning_to_store');
     logEvent(id, 'reverse_collected');
-    showToast('Item collected', 'Bring it to the store', 'package');
-    run(() => api.collectReversePickup(id, {
-      photos: photo ? [photo] : [],
-      ...(otp ? { otp } : {}),
-    }));
-  }, [proofPhoto, setOrderState, logEvent, showToast, run]);
+    showToast(
+      cashHandedPaise ? 'Cash handed · item collected' : 'Item collected',
+      'Bring it to the store',
+      'package',
+    );
+    refresh();
+    return true;
+  }, [proofPhoto, setOrderState, logEvent, showToast, refresh]);
 
   // ── Try-and-Buy door ──
   const arriveAtDoor = useCallback((id: string) => {
