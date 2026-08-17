@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Dimensions, StatusBar, StyleSheet, View } from 'react-native';
+import { StatusBar, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { MotiView } from 'moti';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
@@ -11,11 +11,13 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText, colors, radii, spacing } from '../ui';
 
-const { width } = Dimensions.get('window');
 const ICON = 28;
 
 export default function SplashScreen({ onDone }: { onDone: () => void }) {
   const insets = useSafeAreaInsets();
+  // Live window width (module-level Dimensions goes stale on iPad split-view /
+  // foldables), so the progress bar always spans the real screen.
+  const { width } = useWindowDimensions();
   const barW = width - spacing.screenH * 2;
 
   const p = useSharedValue(0);

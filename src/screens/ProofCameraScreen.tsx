@@ -97,8 +97,8 @@ export default function ProofCameraScreen() {
           <Pressable onPress={() => nav.goBack()} hitSlop={10} disabled={uploading} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: C.white, opacity: uploading ? 0.5 : 1 }}>
             <Feather name="x" size={20} color={C.ink} />
           </Pressable>
-          <View style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: C.white, borderRadius: 999 }}>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>{title}</Text>
+          <View style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: C.white, borderRadius: 999, flexShrink: 1, marginHorizontal: 8 }}>
+            <Text numberOfLines={1} style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>{title}</Text>
           </View>
           <View style={{ width: 40 }} />
         </View>

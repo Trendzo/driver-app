@@ -28,7 +28,6 @@ import { driverOtpLogin } from '../api';
 import { isApiError } from '../api/errors';
 import { MSG91_WIDGET_ID, MSG91_TOKEN_AUTH } from '../config/env';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VEHICLES = ['Bike', 'Scooter', 'Car', 'Bicycle'];
 
 export default function AuthScreen() {
@@ -59,17 +58,22 @@ function Brand() {
 function LoginView({ onSignup }: { onSignup: () => void }) {
   const insets = useSafeAreaInsets();
   const { signIn, showToast } = useApp();
-  const [method, setMethod] = useState<'phone' | 'email'>('phone');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '']);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [reqId, setReqId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Resend cooldown (seconds). Blocks rapid re-taps from firing multiple OTP SMSes.
+  const [cooldown, setCooldown] = useState(0);
   const otpRefs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
 
   const phoneValid = phone.replace(/\D/g, '').length === 10;
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   useEffect(() => {
     try {
@@ -80,6 +84,10 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
   }, []);
 
   const sendOtp = async () => {
+    // Double-tap / spam guard: one in-flight request at a time, then a 30s cooldown
+    // before another SMS can be requested for this number.
+    if (busy) return;
+    if (cooldown > 0) return showToast('Please wait', `You can resend in ${cooldown}s`, 'clock');
     if (!phoneValid) return showToast('Enter your number', 'A valid 10-digit mobile number', 'alert-circle');
     if (!MSG91_WIDGET_ID) return showToast('OTP not configured', 'Set the MSG91 driver widget', 'alert-circle');
     setBusy(true);
@@ -91,6 +99,7 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
       setReqId(String(rid));
       setOtp(['', '', '', '']);
       setStep('otp');
+      setCooldown(30);
       showToast('OTP sent', `Code sent to +91 ${phone}`, 'message-square');
     } catch (e: any) {
       showToast('Could not send OTP', e?.message ?? 'Try again', 'alert-circle');
@@ -99,14 +108,26 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
     }
   };
   const setDigit = (i: number, v: string) => {
-    const d = v.replace(/\D/g, '').slice(-1);
+    const digits = v.replace(/\D/g, '');
+    // 3+ digits at once = SMS autofill or paste — spread the code across all
+    // boxes (each box previously took only its own keystroke, so autofill
+    // filled just one field). A complete code verifies automatically.
+    if (digits.length >= 3) {
+      const next = ['', '', '', ''];
+      for (let k = 0; k < 4 && k < digits.length; k++) next[k] = digits[k];
+      setOtp(next);
+      otpRefs[Math.min(3, digits.length - 1)].current?.focus();
+      if (digits.length >= 4) void verifyCode(next.join(''));
+      return;
+    }
+    const d = digits.slice(-1);
     const next = [...otp];
     next[i] = d;
     setOtp(next);
     if (d && i < 3) otpRefs[i + 1].current?.focus();
   };
-  const verify = async () => {
-    const code = otp.join('').replace(/\D/g, '');
+  const verifyCode = async (raw: string) => {
+    const code = raw.replace(/\D/g, '');
     if (code.length < 4 || !reqId) return showToast('Enter the code', 'Type all 4 digits', 'alert-circle');
     if (busy) return;
     setBusy(true);
@@ -123,34 +144,23 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
       setBusy(false);
     }
   };
-  const emailLogin = () => {
-    // Backend is phone-OTP only; there is no driver email login.
-    showToast('Use phone OTP', 'Sign in with your mobile number', 'smartphone');
-  };
+  const verify = () => verifyCode(otp.join(''));
 
   return (
     <Screen edges={['top', 'bottom']} padded={false}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
         <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Brand />
 
           <AppText variant="display" color={colors.ink} style={styles.headline}>
-            {method === 'phone' && step === 'otp' ? 'Enter\nthe code' : 'Log in to\nstart earning'}
+            {step === 'otp' ? 'Enter\nthe code' : 'Log in to\nstart earning'}
           </AppText>
 
-          {/* method toggle */}
-          {step === 'phone' && (
-            <View style={styles.toggle}>
-              <ToggleBtn label="Phone OTP" active={method === 'phone'} onPress={() => setMethod('phone')} />
-              <ToggleBtn label="Email" active={method === 'email'} onPress={() => setMethod('email')} />
-            </View>
-          )}
-
-          {method === 'phone' ? (
-            step === 'phone' ? (
+          {/* Phone OTP only — the backend has no email login. */}
+          {step === 'phone' ? (
               <View style={styles.form}>
                 <Field label="Mobile number" required prefix="+91" value={phone} onChangeText={(t) => setPhone(t.replace(/\D/g, '').slice(0, 10))} placeholder="00000 00000" keyboardType="number-pad" maxLength={10} />
-                <Button label="Send OTP" tone="accent" disabled={!phoneValid} onPress={sendOtp} icon={<Icon name="arrow-forward" size={18} color={colors.accentInk} />} />
+                <Button label={cooldown > 0 ? `Resend in ${cooldown}s` : 'Send OTP'} tone="accent" disabled={!phoneValid || cooldown > 0} loading={busy} onPress={sendOtp} icon={<Icon name="arrow-forward" size={18} color={colors.accentInk} />} />
               </View>
             ) : (
               <View style={styles.form}>
@@ -170,7 +180,12 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
                       onChangeText={(v) => setDigit(i, v)}
                       onKeyPress={({ nativeEvent }) => { if (nativeEvent.key === 'Backspace' && !otp[i] && i > 0) otpRefs[i - 1].current?.focus(); }}
                       keyboardType="number-pad"
-                      maxLength={1}
+                      // maxLength 4 (not 1) so iOS keyboard OTP suggestions and Android
+                      // SMS autofill can inject the whole code; setDigit spreads it out.
+                      maxLength={4}
+                      textContentType="oneTimeCode"
+                      autoComplete={i === 0 ? 'sms-otp' : 'off'}
+                      maxFontSizeMultiplier={1.2}
                       style={[styles.otpBox, d ? styles.otpBoxFilled : null]}
                     />
                   ))}
@@ -179,18 +194,17 @@ function LoginView({ onSignup }: { onSignup: () => void }) {
                   <Icon name="information-circle-outline" size={15} color={colors.meta} />
                   <AppText variant="meta" color={colors.meta}>Enter the 4-digit code we texted you</AppText>
                 </View>
-                <Button label="Verify & continue" tone="accent" onPress={verify} icon={<Icon name="checkmark" size={18} color={colors.accentInk} />} />
-                <Pressable onPress={() => showToast('OTP resent', `New code sent to +91 ${phone}`, 'refresh-cw')} style={styles.center}>
-                  <AppText variant="bodyMedium" color={colors.meta}>Didn't get it? <AppText variant="bodyMedium" color={colors.ink}>Resend code</AppText></AppText>
+                <Button label="Verify & continue" tone="accent" loading={busy} onPress={verify} icon={<Icon name="checkmark" size={18} color={colors.accentInk} />} />
+                {/* Real resend (it previously only showed a toast without sending
+                    anything) — goes through sendOtp, so the cooldown applies. */}
+                <Pressable disabled={busy || cooldown > 0} onPress={sendOtp} style={styles.center}>
+                  {cooldown > 0 ? (
+                    <AppText variant="bodyMedium" color={colors.meta}>Resend code in {cooldown}s</AppText>
+                  ) : (
+                    <AppText variant="bodyMedium" color={colors.meta}>Didn't get it? <AppText variant="bodyMedium" color={colors.ink}>Resend code</AppText></AppText>
+                  )}
                 </Pressable>
               </View>
-            )
-          ) : (
-            <View style={styles.form}>
-              <Field label="Email" required value={email} onChangeText={setEmail} placeholder="you@email.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-              <Field label="Password" required value={password} onChangeText={setPassword} placeholder="Your password" secureTextEntry autoCapitalize="none" />
-              <Button label="Log in" tone="accent" onPress={emailLogin} />
-            </View>
           )}
 
           <View style={styles.flex} />
@@ -210,8 +224,6 @@ function SignupView({ onLogin }: { onLogin: () => void }) {
   const { showToast } = useApp();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [vehicle, setVehicle] = useState('');
   const [vehicleNo, setVehicleNo] = useState('');
   const [city, setCity] = useState('');
@@ -219,8 +231,6 @@ function SignupView({ onLogin }: { onLogin: () => void }) {
   const create = () => {
     if (name.trim().length < 2) return showToast('Enter your name', 'Your full name', 'alert-circle');
     if (phone.replace(/\D/g, '').length !== 10) return showToast('Check mobile', 'A valid 10-digit number', 'alert-circle');
-    if (!EMAIL_RE.test(email.trim())) return showToast('Check email', 'Enter a valid email', 'alert-circle');
-    if (password.length < 6) return showToast('Weak password', 'At least 6 characters', 'alert-circle');
     if (!vehicle) return showToast('Pick a vehicle', 'Select your delivery vehicle', 'alert-circle');
     if (vehicleNo.trim().length < 4 && vehicle !== 'Bicycle') return showToast('Vehicle number', 'Enter your vehicle number', 'alert-circle');
     if (city.trim().length < 2) return showToast('Enter city', 'Where do you deliver?', 'alert-circle');
@@ -231,7 +241,7 @@ function SignupView({ onLogin }: { onLogin: () => void }) {
 
   return (
     <Screen edges={['top', 'bottom']} padded={false}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
         <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Brand />
           <AppText variant="display" color={colors.ink} style={styles.headline}>Become a{'\n'}partner</AppText>
@@ -240,8 +250,6 @@ function SignupView({ onLogin }: { onLogin: () => void }) {
           <View style={styles.form}>
             <Field label="Full name" required value={name} onChangeText={setName} placeholder="e.g. Ravi Kumar" autoCapitalize="words" />
             <Field label="Mobile number" required prefix="+91" value={phone} onChangeText={(t) => setPhone(t.replace(/\D/g, '').slice(0, 10))} placeholder="00000 00000" keyboardType="number-pad" maxLength={10} />
-            <Field label="Email" required value={email} onChangeText={setEmail} placeholder="you@email.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-            <Field label="Password" required value={password} onChangeText={setPassword} placeholder="At least 6 characters" secureTextEntry autoCapitalize="none" />
 
             <View style={styles.block}>
               <AppText variant="sectionLabel" color={colors.meta} style={styles.blockLabel}>Vehicle *</AppText>
@@ -304,7 +312,7 @@ export function CompleteProfileScreen() {
 
   return (
     <Screen edges={['top', 'bottom']} padded={false}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
         <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Brand />
           <AppText variant="display" color={colors.ink} style={styles.headline}>Set up{'\n'}your profile</AppText>
@@ -344,28 +352,21 @@ export function CompleteProfileScreen() {
   );
 }
 
-function ToggleBtn({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.toggleBtn, active && styles.toggleBtnOn]}>
-      <AppText variant="bodyMedium" color={active ? colors.accentInk : colors.meta}>{label}</AppText>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { paddingHorizontal: spacing.screenH, paddingBottom: spacing.xl, flexGrow: 1 },
+  // maxWidth + centering keeps the form a comfortable column on tablets/landscape
+  // instead of stretching edge-to-edge; phones are unaffected.
+  content: { paddingHorizontal: spacing.screenH, paddingBottom: spacing.xl, flexGrow: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm + 2 },
   brandMark: { width: 44, height: 44, borderRadius: radii.sm + 4, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   headline: { fontSize: 36, lineHeight: 40, marginTop: spacing.xl },
   sub: { marginTop: spacing.sm },
-  toggle: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radii.pill, padding: 4, marginTop: spacing.lg, gap: 4 },
-  toggleBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: radii.pill },
-  toggleBtnOn: { backgroundColor: colors.ink },
   form: { marginTop: spacing.lg, gap: spacing.lg },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  otpRow: { flexDirection: 'row', gap: spacing.md },
-  otpBox: { width: 62, height: 66, borderRadius: radii.sm + 4, borderWidth: 1.5, borderColor: colors.hairline, backgroundColor: colors.surface, textAlign: 'center', fontFamily: fonts.black, fontSize: 26, color: colors.ink },
+  otpRow: { flexDirection: 'row', gap: spacing.sm + 4 },
+  // flex + maxWidth (was a fixed 62px): 4 fixed boxes + gaps + screen padding
+  // overflowed 320dp screens; now the boxes shrink together and never spill.
+  otpBox: { flex: 1, maxWidth: 62, height: 66, borderRadius: radii.sm + 4, borderWidth: 1.5, borderColor: colors.hairline, backgroundColor: colors.surface, textAlign: 'center', fontFamily: fonts.black, fontSize: 26, color: colors.ink },
   otpBoxFilled: { backgroundColor: colors.ink, borderColor: colors.ink, color: colors.surface },
   hintRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2 },
   center: { alignItems: 'center' },

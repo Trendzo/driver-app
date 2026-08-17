@@ -61,12 +61,24 @@ export const POLICY_LABEL: Record<ItemPolicy, string> = {
 // Per-item decision made at the Try-and-Buy door.
 export type DoorDecision = 'pending' | 'kept' | 'returned' | 'refused' | 'store_decides';
 
+// Live customer-driven try-on state for one item during the door window.
+export type DoorItemState =
+  | 'undecided'
+  | 'kept'
+  | 'return_requested'
+  | 'return_accepted'
+  | 'return_rejected';
+
 export type OrderItem = {
   id: string;
   name: string;
   qty: number;
   note?: string;
   policy: ItemPolicy;
+  image?: string;
+  // Customer-driven door staging (Try-and-Buy, while at_door).
+  doorState?: DoorItemState;
+  agentReturnReason?: string | null;
 };
 
 export type Payment = 'PREPAID' | 'COD';
@@ -93,6 +105,8 @@ export type Order = {
   targetMin: number;
   // ISO timestamp the order was placed — used to sort the deliveries list (newest first).
   placedAt?: string;
+  // Try-and-Buy: server's try-on window deadline (ISO). Source of truth for the door timer.
+  doorWindowExpiresAt?: string | null;
 };
 
 // ─── TRACK POINTS — progress steps differ PER delivery method ──

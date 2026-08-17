@@ -7,6 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme/brutal';
 import { BrutalToast, BrutalConfirm } from '../components/Brutal';
+import { NewOfferModal } from '../components/NewOfferModal';
 import { useApp, isActive } from '../state/AppState';
 
 import SplashScreen from '../screens/SplashScreen';
@@ -50,11 +51,11 @@ function PartnerTabBar({ state, navigation }: BottomTabBarProps) {
                 <Feather name={it.icon} size={20} color={tint} />
                 {badge > 0 && (
                   <View style={styles.badge}>
-                    <Text style={{ color: C.white, fontFamily: 'Inter_700Bold', fontSize: 10 }}>{badge}</Text>
+                    <Text maxFontSizeMultiplier={1.1} style={{ color: C.white, fontFamily: 'Inter_700Bold', fontSize: 10 }}>{badge}</Text>
                   </View>
                 )}
               </View>
-              <Text style={[styles.lbl, { color: tint }]}>{it.label}</Text>
+              <Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={[styles.lbl, { color: tint }]}>{it.label}</Text>
             </Pressable>
           );
         })}
@@ -71,7 +72,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 8,
-    minWidth: '90%',
+    // 90% of the screen on phones, but capped so iPads don't get a ~700px mega-pill.
+    width: '90%',
+    maxWidth: 480,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 20,
@@ -158,6 +161,8 @@ export default function RootNav() {
       </NavigationContainer>
       <BrutalToast toast={toast} onHide={hideToast} />
       <BrutalConfirm confirm={confirm} onHide={hideConfirm} />
+      {/* Global "new order" modal — appears over any screen when an offer arrives. */}
+      <NewOfferModal onAccepted={() => navigationRef.current?.navigate('Tabs', { screen: 'DeliveriesTab' })} />
     </View>
   );
 }

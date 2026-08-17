@@ -21,9 +21,9 @@ function ReturnCard({ o, kind }: { o: Order; kind: 'pickup' | 'handoff' }) {
   const place = kind === 'handoff' ? o.store : o.customer;
   return (
     <Pressable onPress={go} style={[{ backgroundColor: C.white, marginBottom: SP.m }, BORDER(1)]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SP.m }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: SP.m }}>
         <MethodBadge method={o.method} />
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
+        <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim, flexShrink: 1 }}>#{o.id.replace(/^(ord_|rpk_)/, '').slice(0, 8)}</Text>
       </View>
       <View style={{ height: 1, backgroundColor: C.hairline }} />
       <View style={{ paddingHorizontal: SP.m, paddingTop: SP.m }}>
@@ -33,7 +33,7 @@ function ReturnCard({ o, kind }: { o: Order; kind: 'pickup' | 'handoff' }) {
         {o.pickupItem && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
             <Feather name="package" size={13} color={C.ink} />
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink }}>{o.pickupItem}</Text>
+            <Text numberOfLines={2} style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, flex: 1 }}>{o.pickupItem}</Text>
           </View>
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>

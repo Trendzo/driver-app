@@ -2,7 +2,7 @@
 // the not-home / undelivered path, abort, and the pre-door steps of Try-and-Buy
 // (then hands off to the Door screen). One obvious action per state.
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Linking, Modal } from 'react-native';
+import { View, Text, ScrollView, Pressable, Linking, Modal, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,20 +16,23 @@ import { STATE_LABEL, METHOD_LABEL, UNDELIVERED_REASONS } from '../data/mockData
 
 export default function OrderDetailScreen() {
   const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
   const nav = useNavigation<any>();
   const { id } = useRoute<any>().params;
   const {
     getOrder, proofPhoto, setProofPhoto, showConfirm, handoffCodeFor,
     startDelivery, markDelivered, markUndelivered, retryDelivery,
-    returnToStore, abort, collectReverse, arriveAtDoor,
+    returnToStore, abort, collectReverse, openDoorHandover,
   } = useApp();
   const o = getOrder(id);
 
   const [captureFor, setCaptureFor] = useState<null | 'proof' | 'location' | 'reverse'>(null);
   const [codModal, setCodModal] = useState(false);
   const [reasonModal, setReasonModal] = useState(false);
+  const [startedModal, setStartedModal] = useState(false); // "delivery started" confirmation
   const [cod, setCod] = useState('');
   const [otp, setOtp] = useState(''); // consumer delivery OTP (door deliveries carry one)
+  const [busy, setBusy] = useState(false);
   // Cash-refund handover ack (COD reverse pickups). Reset per order alongside the photo.
   const [cashAcked, setCashAcked] = useState(false);
 
@@ -184,10 +187,33 @@ export default function OrderDetailScreen() {
         );
       }
       case 'picked_up':
-        return <SwipeToConfirm label="Start delivery" icon="navigation" onConfirm={() => startDelivery(o.id)} />;
+        // Confirm → show a clear "Delivery started" step with an Open-map CTA, instead of
+        // silently swapping the footer.
+        return <SwipeToConfirm label="Start delivery" icon="navigation" onConfirm={() => { startDelivery(o.id); setStartedModal(true); }} />;
       case 'out_for_delivery':
         if (isTryBuy) {
-          return <SwipeToConfirm label="I've arrived" icon="map-pin" onConfirm={() => { arriveAtDoor(o.id); nav.navigate('Door', { id: o.id }); }} />;
+          // Handover: enter the OTP the customer reads out. Verifying it OPENS the door and
+          // starts the try-on timer (the customer then chooses keep/return per item).
+          return (
+            <>
+              <View style={{ marginBottom: SP.s }}>
+                <BrutalInput value={otp} onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 8))} label="Customer's handover OTP" placeholder="Ask the customer" keyboardType="number-pad" />
+              </View>
+              <SwipeToConfirm
+                label="Hand over · start try-on"
+                icon="unlock"
+                disabled={otp.trim().length === 0 || busy}
+                onConfirm={async () => {
+                  setBusy(true);
+                  const ok = await openDoorHandover(o.id, otp.trim());
+                  setBusy(false);
+                  if (ok) nav.navigate('Door', { id: o.id });
+                }}
+              />
+              <View style={{ height: SP.s }} />
+              <BrutalButton label="Couldn't deliver" variant="outline" icon="phone-off" block onPress={() => openCamera('location')} />
+            </>
+          );
         }
         return (
           <>
@@ -201,7 +227,7 @@ export default function OrderDetailScreen() {
           </>
         );
       case 'at_door':
-        return <BrutalButton label="Open the door flow" icon="maximize" big block onPress={() => nav.navigate('Door', { id: o.id })} />;
+        return <BrutalButton label="Continue try-on" icon="maximize" big block onPress={() => nav.navigate('Door', { id: o.id })} />;
       case 'undelivered':
         return (
           <>
@@ -220,8 +246,11 @@ export default function OrderDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <BrutalStatusBar />
-      <ScreenHeader title={`#${o.id}`} onBack={() => nav.goBack()} />
+      <ScreenHeader title={`#${o.id.replace(/^(ord_|rpk_)/, '').slice(0, 8).toUpperCase()}`} onBack={() => nav.goBack()} />
 
+      {/* KeyboardAvoidingView: the OTP input lives in the sticky footer — without
+          this the iOS keyboard covers it entirely. Android resizes natively. */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: SP.l, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         {/* method + status */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SP.m }}>
@@ -289,37 +318,67 @@ export default function OrderDetailScreen() {
         )}
       </ScrollView>
 
-      {/* sticky action footer */}
-      <View style={{ padding: SP.l, paddingBottom: insets.bottom + 14, backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.hairline }}>
-        {renderAction()}
+      {/* sticky action footer — the reverse-pickup stack (cash banner + checkbox +
+          photo row + OTP + swipe) can outgrow a 320×568 screen, so the footer is
+          height-capped and scrolls internally instead of squeezing the content area
+          to nothing. Scrolling only engages when the content is actually taller. */}
+      <View style={{ paddingBottom: insets.bottom + 14, backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.hairline, maxHeight: Math.max(260, winH * 0.55) }}>
+        <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: SP.l, paddingBottom: 0 }} showsVerticalScrollIndicator={false}>
+          {renderAction()}
+        </ScrollView>
       </View>
+      </KeyboardAvoidingView>
 
-      {/* COD entry modal */}
+      {/* COD entry modal — keyboard-aware, height-capped, tablet-centred sheet. */}
       <Modal transparent visible={codModal} animationType="fade" onRequestClose={() => setCodModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+          <View style={[{ backgroundColor: C.bg, maxHeight: '85%', width: '100%', maxWidth: 560, alignSelf: 'center' }, BORDER(2)]}>
+            <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: SP.l, paddingBottom: insets.bottom + 20 }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginBottom: 4 }}>Cash collected</Text>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginBottom: SP.l }}>Enter the amount you collected from the customer.</Text>
+              <BrutalInput value={cod} onChangeText={setCod} label="Amount (₹)" keyboardType="number-pad" />
+              <BrutalButton label="Confirm & mark delivered" icon="check" big block onPress={confirmCod} />
+              <View style={{ height: SP.s }} />
+              <BrutalButton label="Cancel" variant="ghost" block onPress={() => setCodModal(false)} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* not-home reason picker — the reason list scrolls inside a capped sheet
+          so it can never run past the viewport on short/landscape screens. */}
+      <Modal transparent visible={reasonModal} animationType="fade" onRequestClose={() => { setReasonModal(false); setCaptureFor(null); }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-          <View style={[{ backgroundColor: C.bg, padding: SP.l, paddingBottom: insets.bottom + 20 }, BORDER(2)]}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginBottom: 4 }}>Cash collected</Text>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: C.dim, marginBottom: SP.l }}>Enter the amount you collected from the customer.</Text>
-            <BrutalInput value={cod} onChangeText={setCod} label="Amount (₹)" keyboardType="number-pad" />
-            <BrutalButton label="Confirm & mark delivered" icon="check" big block onPress={confirmCod} />
-            <View style={{ height: SP.s }} />
-            <BrutalButton label="Cancel" variant="ghost" block onPress={() => setCodModal(false)} />
+          <View style={[{ backgroundColor: C.bg, maxHeight: '85%', width: '100%', maxWidth: 560, alignSelf: 'center' }, BORDER(2)]}>
+            <ScrollView bounces={false} contentContainerStyle={{ padding: SP.l, paddingBottom: insets.bottom + 20 }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginBottom: 4 }}>Why couldn't you deliver?</Text>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginBottom: SP.m }}>Photo attached. Pick a reason — the customer is notified.</Text>
+              {UNDELIVERED_REASONS.map(r => (
+                <Pressable key={r} onPress={() => pickReason(r)} style={[{ padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: C.ink }}>{r}</Text>
+                </Pressable>
+              ))}
+              <BrutalButton label="Cancel" variant="ghost" block onPress={() => { setReasonModal(false); setCaptureFor(null); }} />
+            </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* not-home reason picker */}
-      <Modal transparent visible={reasonModal} animationType="fade" onRequestClose={() => { setReasonModal(false); setCaptureFor(null); }}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-          <View style={[{ backgroundColor: C.bg, padding: SP.l, paddingBottom: insets.bottom + 20 }, BORDER(2)]}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: C.ink, marginBottom: 4 }}>Why couldn't you deliver?</Text>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: C.dim, marginBottom: SP.m }}>Photo attached. Pick a reason — the customer is notified.</Text>
-            {UNDELIVERED_REASONS.map(r => (
-              <Pressable key={r} onPress={() => pickReason(r)} style={[{ padding: SP.m, marginBottom: SP.s, backgroundColor: C.white }, BORDER(1)]}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: C.ink }}>{r}</Text>
-              </Pressable>
-            ))}
-            <BrutalButton label="Cancel" variant="ghost" block onPress={() => { setReasonModal(false); setCaptureFor(null); }} />
+      {/* "Delivery started" — clear next step after the start-delivery swipe */}
+      <Modal transparent visible={startedModal} animationType="fade" onRequestClose={() => setStartedModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: SP.l }}>
+          <View style={{ width: '100%', maxWidth: 420, backgroundColor: C.white, borderRadius: 18, padding: SP.l, gap: SP.m }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="navigation" size={20} color={C.white} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.ink }}>Delivery started</Text>
+                <Text numberOfLines={2} style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.dim, marginTop: 1 }}>Head to {o.customer.name}. Open the map to navigate.</Text>
+              </View>
+            </View>
+            <BrutalButton label="Open map" icon="map" big block onPress={() => { setStartedModal(false); openMap(); }} />
+            <BrutalButton label="Continue" variant="ghost" block onPress={() => setStartedModal(false)} />
           </View>
         </View>
       </Modal>

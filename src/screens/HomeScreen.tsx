@@ -1,14 +1,15 @@
-// Home dashboard — the rider's day at a glance: earnings, rating, deliveries,
-// distance, COD to deposit, active jobs, and this week's summary.
-import React, { useEffect, useState } from 'react';
+// Home dashboard — the rider's day at a glance, backend-only data: earnings,
+// deliveries, COD to deposit, active jobs, and this week's summary.
+import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, T, SP } from '../theme/brutal';
 import { BrutalStatusBar, BrutalCard, BrutalButton, SectionHead, StatTile } from '../components/Brutal';
 import { MethodBadge } from '../components/DeliveryBits';
 import { useApp, isActive } from '../state/AppState';
-import { AGENT, TODAY, WEEK, STATE_LABEL } from '../data/mockData';
+import { STATE_LABEL } from '../data/mockData';
 import { earningsSummary, type EarningsSummary } from '../api';
 
 const rupee = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -23,24 +24,24 @@ function Chip({ icon, text }: { icon: any; text: string }) {
   );
 }
 
-function MiniStat({ icon, label }: { icon: any; label: string }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <Feather name={icon} size={13} color="rgba(255,255,255,0.7)" />
-      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>{label}</Text>
-    </View>
-  );
-}
-
 export default function HomeScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { agent, driver, orders, deliveredToday, codCollected, cashPendingDeposit, depositCash, showConfirm } = useApp();
+  const { driver, orders, deliveredToday, codCollected, cashPendingDeposit, depositCash, showConfirm } = useApp();
   const [earn, setEarn] = useState<EarningsSummary | null>(null);
-  useEffect(() => {
-    earningsSummary().then(setEarn).catch(() => {});
-  }, []);
-  const todayEarnings = earn ? rupeeP(earn.today.earningsPaise) : rupee(TODAY.earnings);
-  const todayDelivered = earn ? earn.today.deliveries : deliveredToday;
+  // Refetch every time Home regains focus (it's a kept-alive tab) so a delivery completed
+  // on another screen shows up immediately — the old single mount-fetch never updated.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      earningsSummary().then((e) => { if (alive) setEarn(e); }).catch(() => {});
+      return () => { alive = false; };
+    }, []),
+  );
+  // Backend is the source of truth, but never regress below the live local counters the
+  // optimistic transitions bumped (the API can briefly lag a just-completed delivery).
+  const todayEarnings = earn ? rupeeP(earn.today.earningsPaise) : '₹—';
+  const todayDelivered = Math.max(earn?.today.deliveries ?? 0, deliveredToday);
+  const todayCod = earn ? rupeeP(earn.today.codCollectedPaise) : rupee(codCollected);
 
   const active = orders.filter((o) => o.method !== 'REVERSE_PICKUP' && isActive(o));
   const hour = new Date().getHours();
@@ -61,7 +62,7 @@ export default function HomeScreen({ navigation }: any) {
       <BrutalStatusBar />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + SP.m, paddingHorizontal: SP.l, paddingBottom: 130 }}
+        contentContainerStyle={{ paddingTop: insets.top + SP.m, paddingHorizontal: SP.l, paddingBottom: insets.bottom + 120 }}
       >
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -70,38 +71,33 @@ export default function HomeScreen({ navigation }: any) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={T.label}>{greeting}</Text>
-            <Text style={[T.h2, { marginTop: 2 }]} numberOfLines={1}>{agent?.name ?? 'Partner'}</Text>
+            {/* Signed-in driver only — never demo data. */}
+            <Text style={[T.h2, { marginTop: 2 }]} numberOfLines={1}>{driver?.name || 'Partner'}</Text>
           </View>
           <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center' }}>
             <Feather name="bell" size={20} color={C.ink} />
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: SP.m }}>
-          <Chip icon="map-pin" text={agent?.zone ?? ''} />
-          <Chip icon="clock" text={agent?.shift ?? ''} />
-        </View>
+        {/* City chip — only when the profile actually has one (no demo zone/shift). */}
+        {!!driver?.city && (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: SP.m }}>
+            <Chip icon="map-pin" text={driver.city} />
+          </View>
+        )}
 
         {/* Earnings hero */}
         <BrutalCard solid style={{ marginTop: SP.l }}>
           <Text style={[T.label, { color: 'rgba(255,255,255,0.65)' }]}>Today's earnings</Text>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 44, color: C.white, letterSpacing: -1.5, marginTop: 4 }}>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={{ fontFamily: 'Inter_700Bold', fontSize: 44, color: C.white, letterSpacing: -1.5, marginTop: 4 }}>
             {todayEarnings}
           </Text>
-          <View style={{ flexDirection: 'row', gap: 16, marginTop: 10 }}>
-            <MiniStat icon="trending-up" label={`+${rupee(TODAY.tips)} tips`} />
-            <MiniStat icon="clock" label={`${TODAY.hoursOnline} hrs online`} />
-          </View>
         </BrutalCard>
 
-        {/* Stats grid */}
+        {/* Stats — backend-backed only (rating / km / on-time have no API yet). */}
         <View style={{ flexDirection: 'row', gap: SP.m, marginTop: SP.m }}>
           <StatTile style={{ flex: 1 }} label="Delivered" value={String(todayDelivered)} sub="today" />
-          <StatTile style={{ flex: 1 }} label="Rating" value={`${agent?.rating ?? 4.9}★`} sub={`${(agent?.ratingCount ?? 0).toLocaleString('en-IN')} trips`} />
-        </View>
-        <View style={{ flexDirection: 'row', gap: SP.m, marginTop: SP.m }}>
-          <StatTile style={{ flex: 1 }} label="Distance" value={`${TODAY.kmLogged}`} sub="km today" />
-          <StatTile style={{ flex: 1 }} label="On-time" value={`${TODAY.onTimePct}%`} sub={`${TODAY.acceptancePct}% accepted`} />
+          <StatTile style={{ flex: 1 }} label="COD taken" value={todayCod} sub="today" />
         </View>
 
         {/* COD outstanding (ledger-backed) */}
@@ -143,7 +139,7 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <MethodBadge method={o.method} />
-                    <Text style={T.caption}>#{o.id}</Text>
+                    <Text numberOfLines={1} style={[T.caption, { flexShrink: 1 }]}>#{o.id.replace(/^ord_/, '').slice(0, 8)}</Text>
                   </View>
                   <Text style={[T.bodyB, { marginTop: 6 }]} numberOfLines={1}>{o.customer.name}</Text>
                   <Text style={T.caption} numberOfLines={1}>{STATE_LABEL[o.state]}</Text>
@@ -157,19 +153,19 @@ export default function HomeScreen({ navigation }: any) {
         {/* This week */}
         <SectionHead title="This week" />
         <BrutalCard style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={T.label}>Earnings</Text>
-            <Text style={[T.h2, { marginTop: 2 }]}>{earn ? rupeeP(earn.week.earningsPaise) : rupee(WEEK.earnings)}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={T.label} numberOfLines={1}>Earnings</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[T.h2, { marginTop: 2 }]}>{earn ? rupeeP(earn.week.earningsPaise) : '₹—'}</Text>
           </View>
           <View style={{ width: 1, height: 36, backgroundColor: C.hairline, marginHorizontal: SP.m }} />
-          <View style={{ flex: 1 }}>
-            <Text style={T.label}>Deliveries</Text>
-            <Text style={[T.h2, { marginTop: 2 }]}>{earn ? earn.week.deliveries : WEEK.deliveries}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={T.label} numberOfLines={1}>Deliveries</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[T.h2, { marginTop: 2 }]}>{earn ? earn.week.deliveries : '—'}</Text>
           </View>
           <View style={{ width: 1, height: 36, backgroundColor: C.hairline, marginHorizontal: SP.m }} />
-          <View style={{ flex: 1 }}>
-            <Text style={T.label}>Days</Text>
-            <Text style={[T.h2, { marginTop: 2 }]}>{earn ? earn.week.days : WEEK.days}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={T.label} numberOfLines={1}>Days</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[T.h2, { marginTop: 2 }]}>{earn ? earn.week.days : '—'}</Text>
           </View>
         </BrutalCard>
       </ScrollView>

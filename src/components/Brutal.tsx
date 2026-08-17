@@ -8,6 +8,7 @@ import {
   Animated, Modal, LayoutChangeEvent,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue, useAnimatedStyle, withTiming, runOnJS, interpolate, Extrapolation,
@@ -66,7 +67,14 @@ export function BrutalButton({ label, onPress, variant = 'solid', icon, iconRigh
         }}
       >
         {icon && <Feather name={icon} size={iconSize} color={fg} />}
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize, color: fg, letterSpacing: 0.2 }}>{label}</Text>
+        {/* flexShrink + centered wrap: long labels stay inside the pill on narrow
+            screens (e.g. two buttons sharing a 288px modal row) instead of overflowing. */}
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={{ fontFamily: 'Inter_700Bold', fontSize, color: fg, letterSpacing: 0.2, flexShrink: 1, textAlign: 'center' }}
+        >
+          {label}
+        </Text>
         {iconRight && <Feather name={iconRight} size={iconSize} color={fg} />}
       </Pressable>
     </Animated.View>
@@ -152,10 +160,13 @@ export function DottedRule() {
 
 // ─── SCREEN HEADER ─────────────────────────────────────────
 export function ScreenHeader({ title, onBack, right }: { title: string; onBack?: () => void; right?: ReactNode }) {
+  // Safe-area-driven top padding (was a hardcoded 54): correct on notchless
+  // Androids, Dynamic-Island iPhones and iPads alike.
+  const insets = useSafeAreaInsets();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: SP.l, paddingTop: 54, paddingBottom: SP.m, backgroundColor: C.bg, gap: SP.m }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: SP.l, paddingTop: insets.top + SP.m, paddingBottom: SP.m, backgroundColor: C.bg, gap: SP.m }}>
       {onBack ? <BrutalIconBtn icon="chevron-left" onPress={onBack} size={40} /> : null}
-      <Text numberOfLines={1} style={[T.h2, { flex: 1 }]}>{title}</Text>
+      <Text numberOfLines={1} style={[T.h2, { flex: 1, minWidth: 0 }]}>{title}</Text>
       {right ?? null}
     </View>
   );
@@ -181,9 +192,10 @@ export function StatTile({ label, value, sub, solid, style }: { label: string; v
   const onDarkDim = solid ? 'rgba(255,255,255,0.65)' : C.dim;
   return (
     <View style={[{ padding: SP.l, backgroundColor: solid ? C.ink : C.white, borderRadius: RADIUS.lg, minWidth: 0 }, style]}>
-      <Text style={[T.label, { color: onDarkDim }]}>{label}</Text>
-      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, letterSpacing: -0.8, color: onDark, marginTop: 6 }}>{value}</Text>
-      {sub && <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: onDarkDim, marginTop: 2 }}>{sub}</Text>}
+      <Text style={[T.label, { color: onDarkDim }]} numberOfLines={1}>{label}</Text>
+      {/* Half-width tiles get ~120px at 320dp — scale the value down instead of clipping. */}
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={{ fontFamily: 'Inter_700Bold', fontSize: 28, letterSpacing: -0.8, color: onDark, marginTop: 6 }}>{value}</Text>
+      {sub && <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: onDarkDim, marginTop: 2 }} numberOfLines={1}>{sub}</Text>}
     </View>
   );
 }
@@ -304,7 +316,7 @@ export function SwipeToConfirm({ label, onConfirm, icon = 'chevrons-right', disa
     >
       <AReanimated style={[{ position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: disabled ? C.faint : C.ink, borderRadius: RADIUS.pill }, fillStyle]} />
       <AReanimated style={[{ position: 'absolute', left: KNOB + PAD, right: SP.m, alignItems: 'center' }, labelStyle]} pointerEvents="none">
-        <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: disabled ? C.dim : C.ink, letterSpacing: 0.2 }}>{label}</Text>
+        <Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: disabled ? C.dim : C.ink, letterSpacing: 0.2 }}>{label}</Text>
       </AReanimated>
       <GestureDetector gesture={gesture}>
         <AReanimated style={[{ width: KNOB, height: KNOB, borderRadius: KNOB / 2, marginLeft: PAD, backgroundColor: disabled ? C.dim : C.ink, alignItems: 'center', justifyContent: 'center' }, knobStyle]}>
@@ -318,21 +330,24 @@ export function SwipeToConfirm({ label, onConfirm, icon = 'chevrons-right', disa
 // ─── TOAST ─────────────────────────────────────────────────
 export function BrutalToast({ toast, onHide }: { toast: { title: string; msg?: string; icon?: string } | null; onHide: () => void }) {
   const anim = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
   useEffect(() => {
     Animated.timing(anim, { toValue: toast ? 1 : 0, duration: 240, useNativeDriver: true }).start();
   }, [toast]);
   if (!toast) return null;
+  // Anchored at the TOP: a bottom toast sat behind the keyboard whenever an
+  // input was focused (OTP, COD amount…). The top edge is never obscured.
   return (
     <Animated.View
       pointerEvents="box-none"
-      style={{ position: 'absolute', left: 0, right: 0, bottom: 110, alignItems: 'center', zIndex: 9999, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }], opacity: anim }}
+      style={{ position: 'absolute', left: 0, right: 0, top: insets.top + 10, alignItems: 'center', zIndex: 9999, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-40, 0] }) }], opacity: anim }}
     >
-      <Pressable onPress={onHide} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SP.m, paddingVertical: 12, backgroundColor: C.ink, maxWidth: '92%', borderRadius: RADIUS.pill }}>
-        <View style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)' }}>
-          <Feather name={(toast.icon as any) || 'check'} size={14} color="#fff" />
+      <Pressable onPress={onHide} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: SP.m, paddingVertical: 10, backgroundColor: C.ink, maxWidth: '92%', borderRadius: RADIUS.lg }}>
+        <View style={{ width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)', flexShrink: 0 }}>
+          <Feather name={(toast.icon as any) || 'check'} size={13} color="#fff" />
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: '#fff' }}>{toast.title}</Text>
+        <View style={{ flexShrink: 1 }}>
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: '#fff' }}>{toast.title}</Text>
           {/* Up to 3 lines: server rejections carry real instructions ("Hand ₹X in cash
               to the customer and confirm the exact amount") that a single clipped line
               would swallow. */}
@@ -350,7 +365,7 @@ export function BrutalConfirm({ confirm, onHide }: { confirm: { title: string; m
   return (
     <Modal transparent visible={!!confirm} animationType="fade" onRequestClose={onHide}>
       <Pressable onPress={onHide} style={{ flex: 1, backgroundColor: 'rgba(10,10,10,0.55)', alignItems: 'center', justifyContent: 'center', padding: SP.l }}>
-        <View onStartShouldSetResponder={() => true} style={{ width: '100%', maxWidth: 400, backgroundColor: C.white, borderRadius: RADIUS.lg, padding: SP.l, gap: SP.m }}>
+        <View onStartShouldSetResponder={() => true} style={{ width: '100%', maxWidth: 400, maxHeight: '85%', backgroundColor: C.white, borderRadius: RADIUS.lg, padding: SP.l, gap: SP.m }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: danger ? '#E5484D' : C.mute }}>
               <Feather name={(confirm.icon as any) || (danger ? 'alert-triangle' : 'info')} size={18} color={danger ? '#fff' : C.ink} />

@@ -21,8 +21,8 @@ function nextAction(o: Order): string {
   switch (o.state) {
     case 'packed': return 'Go to store · collect bag';
     case 'picked_up': return 'Start delivery to customer';
-    case 'out_for_delivery': return o.method === 'TRY_AND_BUY' ? 'Tap when you arrive' : 'Hand over · take proof';
-    case 'at_door': return 'Run the try-on at the door';
+    case 'out_for_delivery': return o.method === 'TRY_AND_BUY' ? 'Arrive · enter OTP to start' : 'Hand over · take proof';
+    case 'at_door': return 'Try-on live · manage returns';
     case 'undelivered': return 'Retry or return to store';
     default: return 'Continue';
   }
@@ -30,12 +30,12 @@ function nextAction(o: Order): string {
 
 function DeliveryCard({ o }: { o: Order }) {
   const nav = useNavigation<any>();
-  const { door } = useApp();
-  const doorState = door[o.id];
   const open = () => {
     if (o.method === 'TRY_AND_BUY' && o.state === 'at_door') nav.navigate('Door', { id: o.id });
     else nav.navigate('OrderDetail', { id: o.id });
   };
+  // Try-on window countdown is server-driven (doorWindowExpiresAt); else a static target.
+  const doorEndsAt = o.state === 'at_door' && o.doorWindowExpiresAt ? Date.parse(o.doorWindowExpiresAt) : null;
   return (
     <Pressable onPress={open} style={[{ backgroundColor: C.white, marginBottom: SP.m }, BORDER(1)]}>
       {/* top row: id + method + timer */}
@@ -44,17 +44,19 @@ function DeliveryCard({ o }: { o: Order }) {
           <MethodBadge method={o.method} />
           <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim, flexShrink: 1 }}>{shortId(o.id)}</Text>
         </View>
-        {o.state === 'at_door' && doorState ? <Countdown endsAt={doorState.endsAt} /> : <TargetChip minutes={o.targetMin} />}
+        {doorEndsAt ? <Countdown endsAt={doorEndsAt} /> : <TargetChip minutes={o.targetMin} />}
       </View>
       <View style={{ height: 1, backgroundColor: C.hairline }} />
 
       {/* customer + status */}
       <View style={{ paddingHorizontal: SP.m, paddingTop: SP.m }}>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.ink, letterSpacing: -0.3 }}>{o.customer.name}</Text>
+        <Text numberOfLines={2} style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.ink, letterSpacing: -0.3 }}>{o.customer.name}</Text>
         <Text numberOfLines={1} style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.dim, marginTop: 2 }}>{o.customer.addr}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+        {/* flexWrap: at 320dp a long state label + a COD/CARRY badge can't share one
+            line — let the badge wrap below instead of being pushed off-screen. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
           <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.ink }} />
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>{STATE_LABEL[o.state]}</Text>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink, flexShrink: 1 }}>{STATE_LABEL[o.state]}</Text>
           {o.payment === 'COD' && (
             <View style={{ marginLeft: 'auto', paddingHorizontal: 9, paddingVertical: 3, backgroundColor: C.ink, borderRadius: 999 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.white }}>COD ₹{o.codAmount}</Text>
@@ -126,7 +128,7 @@ function OfferCard({ o }: { o: Order }) {
 
 export default function DeliveriesScreen() {
   const insets = useSafeAreaInsets();
-  const { agent, driver, orders, offers } = useApp();
+  const { driver, orders, offers } = useApp();
   // forward deliveries only (reverse pickups live on the Returns tab), newest first.
   const active = orders
     .filter(o => o.method !== 'REVERSE_PICKUP' && isActive(o))
@@ -143,7 +145,10 @@ export default function DeliveriesScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: C.ink, letterSpacing: -0.5 }}>Deliveries</Text>
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, marginTop: 2 }}>{driver?.city || agent.zone} · {agent.shift}</Text>
+            {/* Real profile city only — no demo zone/shift strings. */}
+            {!!driver?.city && (
+              <Text numberOfLines={1} style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.dim, marginTop: 2 }}>{driver.city}</Text>
+            )}
           </View>
           <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: C.ink, borderRadius: 999, alignItems: 'center' }}>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: C.white }}>{active.length}</Text>

@@ -9,6 +9,11 @@ export type BackendDeliveryItem = {
   qty: number;
   listingId: string;
   listingPolicySnap: 'return' | 'replace' | 'final_sale' | string;
+  galleryImageSnap?: string | null;
+  // Live customer-driven try-on staging (only meaningful while status === 'at_door').
+  customerDoorChoice?: 'keep' | 'return' | null;
+  agentDoorDecision?: 'accept_return' | 'reject_return' | null;
+  agentReturnReason?: string | null;
 };
 
 export type BackendDelivery = {
@@ -121,11 +126,21 @@ export const deliverOrder = (
   id: string,
   body: { otp?: string; note?: string; proofPhotos?: string[]; signatureUrl?: string; codCollectedPaise?: number },
 ) => apiPost(`/driver/deliveries/${id}/deliver`, body);
-export const doorOpen = (id: string) => apiPost(`/driver/deliveries/${id}/door/open`);
+// OTP now proves handover at door OPEN (start of the try-on window), not at close.
+export const doorOpen = (id: string, otp?: string) =>
+  apiPost(`/driver/deliveries/${id}/door/open`, otp ? { otp } : {});
 export const doorExtend = (id: string, reason?: string) =>
   apiPost(`/driver/deliveries/${id}/door/extend`, reason ? { reason } : {});
-export const doorClose = (id: string, items: DoorItemDecision[], otp?: string) =>
-  apiPost(`/driver/deliveries/${id}/door/close`, otp ? { items, otp } : { items });
+// Driver "finish": close from accumulated per-item staging (empty body) or an explicit
+// all-at-once payload. No OTP here anymore.
+export const doorClose = (id: string, items?: DoorItemDecision[]) =>
+  apiPost(`/driver/deliveries/${id}/door/close`, items ? { items } : {});
+/** Driver accepts a customer-requested return (goods travel back to the store). */
+export const acceptReturn = (id: string, itemId: string) =>
+  apiPost(`/driver/deliveries/${id}/items/${itemId}/accept-return`);
+/** Driver inspects & rejects a return at the door (item stays with customer; evidence required). */
+export const rejectReturn = (id: string, itemId: string, reason: string, photos: string[]) =>
+  apiPost(`/driver/deliveries/${id}/items/${itemId}/reject-return`, { reason, photos });
 export const markUndelivered = (id: string, reason: string, photos?: string[]) =>
   apiPost(`/driver/deliveries/${id}/undelivered`, photos ? { reason, photos } : { reason });
 export const returnToStore = (id: string) => apiPost(`/driver/deliveries/${id}/return`);
@@ -179,6 +194,11 @@ export const requestCashDeposit = (body?: { amountPaise?: number; note?: string 
 /* ── Location / earnings / profile ────────────────────────────────────── */
 export const pingLocation = (lat: number, lng: number) => apiPost('/driver/location', { lat, lng });
 export const earningsSummary = () => apiGet<EarningsSummary>('/driver/earnings/summary');
+
+/* ── Native push device token (targeted push: new offers, return requests) ──── */
+export const registerPushToken = (token: string, platform: 'ios' | 'android', appVersion?: string) =>
+  apiPost('/driver/push', appVersion ? { token, platform, appVersion } : { token, platform });
+export const revokePushToken = (token: string) => apiPost('/driver/push/revoke', { token });
 export const getProfile = () => apiGet<DriverProfile>('/driver/profile');
 export const updateProfile = (patch: Partial<Omit<DriverProfile, 'id' | 'phone' | 'status'>>) =>
   apiPatch<DriverProfile>('/driver/profile', patch);

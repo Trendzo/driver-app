@@ -9,19 +9,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, SP, BORDER, ASCII } from '../theme/brutal';
 import { BrutalStatusBar, AsciiDivider, StatTile, BrutalButton } from '../components/Brutal';
 import { useApp } from '../state/AppState';
-import { AGENT, TODAY, FAQS, ESCALATION, DOCUMENTS } from '../data/mockData';
+import { FAQS, ESCALATION } from '../data/mockData';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { phone, driver, signOut, showConfirm, codCollected, cashPendingDeposit, depositCash, deliveredToday, orders } = useApp();
+  // Backend profile only — no demo fallbacks. Missing fields show a plain dash.
   const name = driver?.name || 'Driver';
-  const vehicle = driver?.vehicleNumber
-    ? `${driver.vehicleType ?? ''} ${driver.vehicleNumber}`.trim()
-    : AGENT.vehicle;
-  const zone = driver?.city || AGENT.zone;
+  const vehicle = [driver?.vehicleType, driver?.vehicleNumber].filter(Boolean).join(' ') || '—';
+  const zone = driver?.city || '—';
   const joined = driver?.createdAt
     ? new Date(driver.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
-    : AGENT.joinedOn;
+    : '—';
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const pending = orders.filter(o => !['delivered', 'returned_to_store'].includes(o.state)).length;
 
@@ -49,8 +48,8 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: C.white }}>{name[0]}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: C.ink, letterSpacing: -0.4 }}>{name}</Text>
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: C.dim, marginTop: 1 }}>{phone || driver?.phone || AGENT.phone}</Text>
+              <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: C.ink, letterSpacing: -0.4 }}>{name}</Text>
+              <Text numberOfLines={1} style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: C.dim, marginTop: 1 }}>{phone || driver?.phone || ''}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
                 <Feather name="check-circle" size={11} color={C.ink} />
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.ink }}>Verified agent</Text>
@@ -59,18 +58,16 @@ export default function ProfileScreen() {
           </View>
           <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: SP.m, padding: SP.s, backgroundColor: C.mute }, BORDER(1)]}>
             <Feather name="map" size={13} color={C.ink} />
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, flex: 1 }}>{zone}</Text>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: C.dim }}>{AGENT.shift}</Text>
+            <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: C.ink, flex: 1 }}>{zone}</Text>
           </View>
         </View>
         <View style={{ padding: SP.l }}>
           {/* agent details */}
+          {/* Backend profile fields only. The demo "documents" list (fake DL/RC/
+              Aadhaar with VERIFIED badges) is removed — there is no documents API. */}
           <Section title="DETAILS" />
           <Detail icon="truck" label="Vehicle" value={vehicle} />
           <Detail icon="calendar" label="Joined" value={joined} />
-          {DOCUMENTS.map(d => (
-            <Detail key={d.name} icon={d.icon} label={d.name} value={d.sub} tag={d.status} />
-          ))}
 
           {/* help / FAQ */}
           <Section title="HELP" />

@@ -2,8 +2,8 @@
 // Money is converted paise → whole rupees here so the existing screens (which render
 // `₹{codAmount}`) need no change. Coordinates fall back to {0,0}; screens use the address
 // string for the maps deep-link when coords are missing.
-import type { BackendDelivery, BackendReversePickup } from './index';
-import type { DeliveryMethod, ItemPolicy, Order, OrderState } from '../data/mockData';
+import type { BackendDelivery, BackendReversePickup, BackendDeliveryItem } from './index';
+import type { DeliveryMethod, DoorItemState, ItemPolicy, Order, OrderState } from '../data/mockData';
 
 const METHOD: Record<string, DeliveryMethod> = {
   express: 'EXPRESS',
@@ -24,6 +24,15 @@ const TARGET_MIN: Record<DeliveryMethod, number> = {
   REVERSE_PICKUP: 45,
 };
 
+/** Derive the live per-item door state from the backend staging fields. */
+function doorStateOf(it: BackendDeliveryItem): DoorItemState {
+  if (it.agentDoorDecision === 'accept_return') return 'return_accepted';
+  if (it.agentDoorDecision === 'reject_return') return 'return_rejected';
+  if (it.customerDoorChoice === 'keep') return 'kept';
+  if (it.customerDoorChoice === 'return') return 'return_requested';
+  return 'undecided';
+}
+
 function joinAddr(...parts: (string | null | undefined)[]): string {
   return parts.filter(Boolean).join(', ');
 }
@@ -41,6 +50,7 @@ export function toOrder(d: BackendDelivery): Order {
     codAmount: Math.round(codPaise / 100),
     targetMin: TARGET_MIN[method],
     placedAt: d.placedAt,
+    doorWindowExpiresAt: d.doorWindowExpiresAt,
     store: {
       name: d.storeNameSnap,
       addr: d.storeAddressSnap ?? '',
@@ -61,6 +71,9 @@ export function toOrder(d: BackendDelivery): Order {
       qty: it.qty,
       note: it.attributesLabelSnap ?? undefined,
       policy: POLICY[it.listingPolicySnap] ?? 'RETURN',
+      image: it.galleryImageSnap ?? undefined,
+      doorState: doorStateOf(it),
+      agentReturnReason: it.agentReturnReason ?? null,
     })),
   };
 }

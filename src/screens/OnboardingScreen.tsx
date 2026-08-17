@@ -1,11 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions, Pressable, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, T, SP, BORDER } from '../theme/brutal';
 import { BrutalButton, BrutalStatusBar, AsciiDivider } from '../components/Brutal';
-
-const { width } = Dimensions.get('window');
 
 // Three dead-simple promises. Big icon, big words — readable for a rider who
 // just wants to start earning.
@@ -17,6 +15,9 @@ const SLIDES = [
 
 export default function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const insets = useSafeAreaInsets();
+  // Live width so paging offsets stay correct on rotation / iPad split-view
+  // (module-level Dimensions would keep the launch-time value).
+  const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
 
@@ -62,7 +63,8 @@ export default function OnboardingScreen({ onDone }: { onDone: () => void }) {
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, letterSpacing: 0.8, color: C.dim, textTransform: 'uppercase', marginBottom: 10 }}>{s.kicker}</Text>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 30, letterSpacing: -0.8, lineHeight: 34, color: C.ink }}>{s.title}</Text>
             <AsciiDivider style={{ marginTop: SP.l }} />
-            <Text style={[T.body, { color: C.dim, marginTop: SP.l, fontSize: 16, lineHeight: 23, paddingRight: SP.l }]}>{s.body}</Text>
+            {/* maxWidth keeps body copy at a readable measure on tablets. */}
+            <Text style={[T.body, { color: C.dim, marginTop: SP.l, fontSize: 16, lineHeight: 23, paddingRight: SP.l, maxWidth: 560 }]}>{s.body}</Text>
           </View>
         ))}
       </ScrollView>

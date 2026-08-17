@@ -60,3 +60,30 @@ export async function teardownFcm(): Promise<void> {
     // ignore
   }
 }
+
+/**
+ * Register this device's FCM token with the backend so it can receive TARGETED push
+ * (e.g. a customer requested a return). Safe no-op when the native messaging module is
+ * absent (Expo Go / a build without Firebase, like the current iOS build) or permission
+ * is denied — the app still works via faster polling.
+ */
+export async function registerPushWithBackend(): Promise<void> {
+  const messaging = getMessaging();
+  if (!messaging) return;
+  try {
+    const status = await messaging().requestPermission();
+    const granted =
+      status === messaging.AuthorizationStatus.AUTHORIZED ||
+      status === messaging.AuthorizationStatus.PROVISIONAL;
+    if (!granted) return;
+    const token = await messaging().getToken();
+    if (!token) return;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Platform } = require('react-native');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const api = require('./api');
+    await api.registerPushToken(token, Platform.OS === 'ios' ? 'ios' : 'android').catch(() => {});
+  } catch {
+    // messaging unavailable / not configured → no-op
+  }
+}

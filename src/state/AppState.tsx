@@ -11,17 +11,17 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  Order, OrderState, DoorDecision, AGENT, TODAY,
+  Order, OrderState, AGENT,
 } from '../data/mockData';
 import { setNight as applyNight } from '../theme/brutal';
 import { setAuthToken, setOnUnauthorized } from '../api/session';
 import { isApiError } from '../api/errors';
 import { toOrder, toReverseOrder } from '../api/adapter';
 import * as Location from 'expo-location';
-import { initFcm, teardownFcm } from '../fcm';
+import { initFcm, teardownFcm, registerPushWithBackend } from '../fcm';
 import { USE_FCM_OFFERS } from '../config/env';
 import * as api from '../api';
-import type { DriverProfile, DoorItemDecision } from '../api';
+import type { DriverProfile } from '../api';
 
 const AUTH_KEY = '@trendzo/phone';
 const TOKEN_KEY = '@trendzo/token';
@@ -31,14 +31,6 @@ const NIGHT_KEY = '@trendzo/night';
 
 // An event written on every status change (agent_id attached automatically).
 export type OrderEvent = { orderId: string; type: string; ts: number; reason?: string; photo?: string };
-
-// Per-order door bookkeeping for Try-and-Buy.
-export type DoorState = {
-  endsAt: number;            // epoch ms when the 30-min countdown ends
-  extensionUsed: boolean;    // the one +5 min has been used
-  decisions: Record<string, DoorDecision>;  // itemId -> decision
-  closed: boolean;
-};
 
 type Toast = { title: string; msg?: string; icon?: string } | null;
 type Confirm = { title: string; msg?: string; confirmLabel?: string; cancelLabel?: string; onConfirm?: () => void; danger?: boolean; icon?: string } | null;
@@ -68,7 +60,8 @@ type AppCtx = {
   // ── broadcast offers: packed forward orders + pending reverse pickups,
   //    offered to all drivers (accept = atomic claim, reject = dismiss) ──
   offers: Order[];
-  acceptOffer: (id: string) => void;
+  /** Awaitable: resolves true only when THIS driver won the first-wins claim. */
+  acceptOffer: (id: string) => Promise<boolean>;
   rejectOffer: (id: string) => void;
 
   // ── forward-delivery transitions (Express / Standard). Pickup is store-driven
@@ -85,12 +78,17 @@ type AppCtx = {
   /** assigned -> collected. Awaitable: resolves false when the server rejected it. */
   collectReverse: (id: string, otp?: string, cashHandedPaise?: number) => Promise<boolean>;
 
-  // ── Try-and-Buy door ──
-  door: Record<string, DoorState>;
-  arriveAtDoor: (id: string) => void;         // out_for_delivery -> at_door, start timer
-  decideItem: (id: string, itemId: string, d: DoorDecision) => void;
+  // ── Try-and-Buy door (customer-driven) ──
+  // Handover: verify the customer's OTP → opens the door + starts the server timer.
+  // Awaitable, non-optimistic: resolves false if the OTP was rejected.
+  openDoorHandover: (id: string, otp: string) => Promise<boolean>;
+  // Driver responds to a customer-requested return.
+  acceptReturn: (id: string, itemId: string) => Promise<boolean>;
+  rejectReturn: (id: string, itemId: string, reason: string, photos: string[]) => Promise<boolean>;
   addExtension: (id: string) => void;
-  closeDoor: (id: string, otp?: string) => void;  // apply close rules -> delivered | returning_to_store
+  // Driver finishes the visit (undecided → kept). Rejected by the server if a customer
+  // return is still awaiting the driver's response.
+  finishDoor: (id: string) => Promise<boolean>;
 
   // ── COD cash (ledger-backed): outstanding in ₹ + a pending desk deposit ──
   codCollected: number;
@@ -129,10 +127,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [offers, setOffers] = useState<Order[]>([]);
   const [handoffCodes, setHandoffCodes] = useState<Record<string, string | null>>({});
-  const [door, setDoor] = useState<Record<string, DoorState>>({});
-  const [codCollected, setCodCollected] = useState(TODAY.codCollected);
+  // Start at 0 — real values come from the backend (cash ledger + earnings
+  // summary). Never seed with demo numbers.
+  const [codCollected, setCodCollected] = useState(0);
   const [cashPendingDeposit, setCashPendingDeposit] = useState(0);
-  const [deliveredToday, setDeliveredToday] = useState(TODAY.delivered);
+  const [deliveredToday, setDeliveredToday] = useState(0);
   const [proofPhoto, setProofPhoto] = useState<string | null>(null);
   const [night, setNightState] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
@@ -256,6 +255,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     void refreshCash();
   }, [refreshCash]);
 
+  // Register this device for targeted push once signed in (safe no-op without Firebase).
+  useEffect(() => {
+    if (!token) return;
+    void registerPushWithBackend();
+  }, [token]);
+
   useEffect(() => {
     if (!token) { setOrders([]); setHandoffCodes({}); return; }
     refresh();
@@ -352,17 +357,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ── broadcast offers: accept (atomic claim) / reject (dismiss). Reverse-pickup
   //    tasks share the feed and are routed by their id prefix (rpk_). ──
-  const acceptOffer = useCallback((id: string) => {
-    setOffers(prev => prev.filter(o => o.id !== id));
+  // Awaitable + non-optimistic: the claim is a first-wins race, so callers (e.g. the
+  // global new-order modal) must know whether THIS driver actually won before navigating.
+  const acceptOffer = useCallback(async (id: string): Promise<boolean> => {
     const isReverse = id.startsWith('rpk_');
-    run(() => (isReverse ? api.acceptReversePickup(id) : api.acceptOffer(id)).then(() => {
-      showToast(
-        isReverse ? 'Pickup accepted' : 'Order accepted',
-        isReverse ? 'Head to the customer to collect' : 'Head to the store to collect',
-        'check-circle',
-      );
-    }));
-  }, [run, showToast]);
+    try {
+      await (isReverse ? api.acceptReversePickup(id) : api.acceptOffer(id));
+    } catch (e) {
+      // Lost the race (or transient) — drop it from the feed and tell the driver plainly.
+      setOffers(prev => prev.filter(o => o.id !== id));
+      showToast('Already taken', isApiError(e) ? e.message : 'Another rider claimed this order', 'x-circle');
+      refresh();
+      return false;
+    }
+    setOffers(prev => prev.filter(o => o.id !== id));
+    showToast(
+      isReverse ? 'Pickup accepted' : 'Order accepted',
+      isReverse ? 'Head to the customer to collect' : 'Head to the store to collect',
+      'check-circle',
+    );
+    refresh();
+    return true;
+  }, [refresh, showToast]);
 
   const rejectOffer = useCallback((id: string) => {
     setOffers(prev => prev.filter(o => o.id !== id));
@@ -472,68 +488,79 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [proofPhoto, setOrderState, logEvent, showToast, refresh]);
 
-  // ── Try-and-Buy door ──
-  const arriveAtDoor = useCallback((id: string) => {
-    setOrderState(id, 'at_door');
-    setDoor(prev => {
-      if (prev[id]) return prev;  // keep an existing timer if re-entering
-      const order = orders.find(o => o.id === id);
-      const decisions: Record<string, DoorDecision> = {};
-      order?.items.forEach(it => { decisions[it.id] = 'pending'; });
-      return { ...prev, [id]: { endsAt: Date.now() + 30 * 60 * 1000, extensionUsed: false, decisions, closed: false } };
-    });
-    run(() => api.doorOpen(id));
-  }, [orders, setOrderState, run]);
-
-  const decideItem = useCallback((id: string, itemId: string, d: DoorDecision) => {
-    setDoor(prev => {
-      const st = prev[id]; if (!st) return prev;
-      return { ...prev, [id]: { ...st, decisions: { ...st.decisions, [itemId]: d } } };
-    });
-  }, []);
-
-  const addExtension = useCallback((id: string) => {
-    setDoor(prev => {
-      const st = prev[id]; if (!st || st.extensionUsed) return prev;
-      return { ...prev, [id]: { ...st, endsAt: st.endsAt + 5 * 60 * 1000, extensionUsed: true } };
-    });
-    showToast('+5 minutes added', 'One extension used', 'clock');
-    run(() => api.doorExtend(id));
-  }, [showToast, run]);
-
-  // App door decisions → backend door-close decisions.
-  const DOOR_DECISION: Record<DoorDecision, DoorItemDecision['decision']> = {
-    pending: 'kept',
-    kept: 'kept',
-    returned: 'returned',
-    store_decides: 'returned',
-    refused: 'return_rejected',
-  };
-
-  const closeDoor = useCallback((id: string, otp?: string) => {
-    const order = orders.find(o => o.id === id);
-    const st = door[id];
-    if (!order || !st) return;
-    // Undecided items default to KEPT.
-    const decisions = { ...st.decisions };
-    order.items.forEach(it => { if (decisions[it.id] === 'pending') decisions[it.id] = 'kept'; });
-    setDoor(prev => ({ ...prev, [id]: { ...prev[id], decisions, closed: true } }));
-    const items: DoorItemDecision[] = order.items.map(it => ({
-      orderItemId: it.id,
-      decision: DOOR_DECISION[decisions[it.id]] ?? 'kept',
-    }));
-    const ridingBack = order.items.filter(it => ['returned', 'store_decides'].includes(decisions[it.id]));
-    const allReturned = ridingBack.length === order.items.length;
-    if (allReturned) {
-      setOrderState(id, 'returning_to_store');
-      showToast('Full return', 'Bring the bag back to the store', 'corner-up-left');
-    } else {
-      setOrderState(id, 'delivered');
-      setDeliveredToday(n => n + 1);
-      showToast('Door closed', 'Kept items locked in · delivered', 'check-circle');
+  // ── Try-and-Buy door (customer-driven) ──
+  // Handover: the driver enters the customer's OTP. Verifying it opens the door and starts
+  // the server timer. Non-optimistic — only flip to at_door if the server accepted the OTP.
+  const openDoorHandover = useCallback(async (id: string, otp: string): Promise<boolean> => {
+    try {
+      await api.doorOpen(id, otp);
+    } catch (e) {
+      showToast('Could not start try-on', isApiError(e) ? e.message : 'Check the OTP and try again', 'alert-circle');
+      return false;
     }
-    run(() => api.doorClose(id, items, otp));
-  }, [orders, door, setOrderState, showToast, run]);
+    setOrderState(id, 'at_door');
+    showToast('Try-on started', 'The customer can now choose keep or return', 'clock');
+    // Await the re-sync so the order carries the server's doorWindowExpiresAt BEFORE we
+    // return (the caller navigates to the Door screen on true). Without this the Door
+    // screen briefly reads a null window as "expired".
+    await refresh();
+    return true;
+  }, [setOrderState, showToast, refresh]);
+
+  const acceptReturn = useCallback(async (id: string, itemId: string): Promise<boolean> => {
+    try {
+      await api.acceptReturn(id, itemId);
+    } catch (e) {
+      showToast('Could not accept', isApiError(e) ? e.message : 'Please try again', 'alert-circle');
+      refresh();
+      return false;
+    }
+    showToast('Return accepted', 'Into the bag — bring it back to the store', 'corner-up-left');
+    refresh();
+    return true;
+  }, [showToast, refresh]);
+
+  const rejectReturn = useCallback(async (id: string, itemId: string, reason: string, photos: string[]): Promise<boolean> => {
+    try {
+      await api.rejectReturn(id, itemId, reason, photos);
+    } catch (e) {
+      showToast('Could not reject', isApiError(e) ? e.message : 'Please try again', 'alert-circle');
+      refresh();
+      return false;
+    }
+    showToast('Return rejected', 'The item stays with the customer', 'slash');
+    refresh();
+    return true;
+  }, [showToast, refresh]);
+
+  // Non-optimistic: the +5 is one-shot, so confirm the server granted it before claiming
+  // success (otherwise a rejected second tap shows a contradictory "added" + "failed" pair).
+  const addExtension = useCallback(async (id: string) => {
+    try {
+      await api.doorExtend(id);
+    } catch (e) {
+      showToast("Can't extend", isApiError(e) ? e.message : 'The extension is already used', 'clock');
+      refresh();
+      return;
+    }
+    showToast('+5 minutes added', 'One extension used', 'clock');
+    refresh();
+  }, [showToast, refresh]);
+
+  // Driver finishes the visit (undecided → kept). The server rejects this while a customer
+  // return still awaits the driver's accept/reject.
+  const finishDoor = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      await api.doorClose(id);  // empty body → driver_finish
+    } catch (e) {
+      showToast("Can't finish yet", isApiError(e) ? e.message : 'Resolve pending returns first', 'alert-circle');
+      refresh();
+      return false;
+    }
+    showToast('Door closed', 'Visit complete', 'check-circle');
+    refresh();
+    return true;
+  }, [showToast, refresh]);
 
   // Declare the deposit at the ops desk. The outstanding amount stays until an
   // admin confirms receipt of the physical cash — only then the ledger moves.
@@ -555,14 +582,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     offers, acceptOffer, rejectOffer,
     startDelivery, markDelivered, markUndelivered, retryDelivery,
     returnToStore, handedBack, abort, collectReverse,
-    door, arriveAtDoor, decideItem, addExtension, closeDoor,
+    openDoorHandover, acceptReturn, rejectReturn, addExtension, finishDoor,
     codCollected, cashPendingDeposit, depositCash,
     proofPhoto, setProofPhoto,
     deliveredToday,
     night, toggleNight,
     toast, showToast, hideToast,
     confirm, showConfirm, hideConfirm,
-  }), [phone, token, driver, signupMode, signIn, signOut, completeProfile, onboarded, setOnboarded, orders, getOrder, refresh, handoffCodeFor, offers, acceptOffer, rejectOffer, startDelivery, markDelivered, markUndelivered, retryDelivery, returnToStore, handedBack, abort, collectReverse, door, arriveAtDoor, decideItem, addExtension, closeDoor, codCollected, cashPendingDeposit, depositCash, proofPhoto, deliveredToday, night, toggleNight, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
+  }), [phone, token, driver, signupMode, signIn, signOut, completeProfile, onboarded, setOnboarded, orders, getOrder, refresh, handoffCodeFor, offers, acceptOffer, rejectOffer, startDelivery, markDelivered, markUndelivered, retryDelivery, returnToStore, handedBack, abort, collectReverse, openDoorHandover, acceptReturn, rejectReturn, addExtension, finishDoor, codCollected, cashPendingDeposit, depositCash, proofPhoto, deliveredToday, night, toggleNight, toast, showToast, hideToast, confirm, showConfirm, hideConfirm]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

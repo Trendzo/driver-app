@@ -36,10 +36,10 @@ export default function StoreHandoffScreen() {
       <BrutalStatusBar />
       <ScreenHeader title="Return to store" onBack={() => nav.goBack()} />
 
-      <View style={{ paddingHorizontal: SP.l, paddingTop: SP.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ paddingHorizontal: SP.l, paddingTop: SP.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
           <MethodBadge method={o.method} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim }}>#{o.id}</Text>
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.dim, flexShrink: 1 }}>#{o.id.replace(/^(ord_|rpk_)/, '').slice(0, 8)}</Text>
         </View>
         <Countdown endsAt={endsAt} />
       </View>
