@@ -2,6 +2,13 @@
   "name": "trendzo",
   "version": "1.0.0",
   "main": "index.ts",
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "exclude": ["@react-native-firebase/app", "@react-native-firebase/messaging"]
+      }
+    }
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
