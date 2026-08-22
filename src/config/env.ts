@@ -1,8 +1,10 @@
 // Backend base URL. Expo inlines EXPO_PUBLIC_* at build time; falls back to the shared
 // hosted backend (same instance the retailer app points at).
+// AWS-hosted backend: CloudFront (d208iwmfjcjzy) in front of the EC2 box.
+// Rollback to the old Render backend: 'https://backend-qpmx.onrender.com/api/v1'
 export const API_URL =
   (process.env.EXPO_PUBLIC_API_URL as string | undefined)?.replace(/\/+$/, '') ??
-  'https://backend-qpmx.onrender.com/api/v1';
+  'https://d208iwmfjcjzy.cloudfront.net/api/v1';
 
 // MSG91 phone-OTP widget. Reuses the SAME widget/account as the retailer app (identical
 // WIDGET_ID + TOKEN_AUTH), so the backend verifies driver OTP tokens against the retailer
