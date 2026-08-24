@@ -4,7 +4,7 @@
 // Rollback to the old Render backend: 'https://backend-qpmx.onrender.com/api/v1'
 export const API_URL =
   (process.env.EXPO_PUBLIC_API_URL as string | undefined)?.replace(/\/+$/, '') ??
-  'https://d208iwmfjcjzy.cloudfront.net/api/v1';
+  'https://api.trendzonow.com/api/v1';
 
 // MSG91 phone-OTP widget. Reuses the SAME widget/account as the retailer app (identical
 // WIDGET_ID + TOKEN_AUTH), so the backend verifies driver OTP tokens against the retailer
