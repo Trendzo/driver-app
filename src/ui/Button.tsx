@@ -58,16 +58,12 @@ export function Button({
       ]}
     >
       <View style={styles.content}>
-        {loading ? (
-          <ActivityIndicator color={fg[tone]} />
-        ) : (
-          <>
-            {icon}
-            <AppText variant="button" color={fg[tone]}>
-              {label}
-            </AppText>
-          </>
-        )}
+        {/* Keep the label while loading — a bare spinner drops the one bit of context
+            that tells the user which action is in flight. */}
+        {loading ? <ActivityIndicator color={fg[tone]} /> : icon}
+        <AppText variant="button" color={fg[tone]}>
+          {label}
+        </AppText>
       </View>
     </PressableScale>
   );

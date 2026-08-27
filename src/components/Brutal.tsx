@@ -2,10 +2,10 @@
 // Same component names + props as before (so every screen keeps working); only
 // the visuals change: monochrome, warm-gray canvas, white rounded cards, pill
 // CTAs, Inter type. <SwipeToConfirm> keeps its exact gesture logic.
-import React, { ReactNode, useRef, useEffect, useMemo } from 'react';
+import React, { ReactNode, useRef, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StatusBar, StyleSheet, ViewStyle,
-  Animated, Modal, LayoutChangeEvent,
+  Animated, Modal, LayoutChangeEvent, Keyboard,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -318,6 +318,16 @@ export function SwipeToConfirm({ label, onConfirm, icon = 'chevrons-right', disa
 // ─── TOAST ─────────────────────────────────────────────────
 export function BrutalToast({ toast, onHide }: { toast: { title: string; msg?: string; icon?: string } | null; onHide: () => void }) {
   const anim = useRef(new Animated.Value(0)).current;
+  // Toasts are the only feedback several flows give (OTP rejected, save failed). A fixed
+  // bottom offset parked them *behind* the software keyboard on tablets — where the
+  // keyboard is ~a third of the screen — so an action that clearly failed looked like a
+  // dead button. Sit above the keyboard whenever it is up.
+  const [kbHeight, setKbHeight] = useState(0);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates?.height ?? 0));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
   useEffect(() => {
     Animated.timing(anim, { toValue: toast ? 1 : 0, duration: 240, useNativeDriver: true }).start();
   }, [toast]);
@@ -325,7 +335,7 @@ export function BrutalToast({ toast, onHide }: { toast: { title: string; msg?: s
   return (
     <Animated.View
       pointerEvents="box-none"
-      style={{ position: 'absolute', left: 0, right: 0, bottom: 110, alignItems: 'center', zIndex: 9999, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }], opacity: anim }}
+      style={{ position: 'absolute', left: 0, right: 0, bottom: kbHeight > 0 ? kbHeight + 16 : 110, alignItems: 'center', zIndex: 9999, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }], opacity: anim }}
     >
       <Pressable onPress={onHide} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SP.m, paddingVertical: 12, backgroundColor: C.ink, maxWidth: '92%', borderRadius: RADIUS.pill }}>
         <View style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)' }}>
