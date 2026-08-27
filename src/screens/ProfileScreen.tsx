@@ -10,10 +10,12 @@ import { C, SP, BORDER, ASCII } from '../theme/brutal';
 import { BrutalStatusBar, AsciiDivider, StatTile, BrutalButton } from '../components/Brutal';
 import { useApp } from '../state/AppState';
 import { AGENT, TODAY, FAQS, ESCALATION, DOCUMENTS } from '../data/mockData';
+import * as api from '../api';
+import { isApiError } from '../api/errors';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { phone, driver, signOut, showConfirm, codCollected, cashPendingDeposit, depositCash, deliveredToday, orders } = useApp();
+  const { phone, driver, signOut, showConfirm, showToast, codCollected, cashPendingDeposit, depositCash, deliveredToday, orders } = useApp();
   const name = driver?.name || 'Driver';
   const vehicle = driver?.vehicleNumber
     ? `${driver.vehicleType ?? ''} ${driver.vehicleNumber}`.trim()
@@ -36,6 +38,19 @@ export default function ProfileScreen() {
     title: 'Sign out?', danger: true, icon: 'log-out',
     msg: 'You will need to log in again to see your assigned orders.',
     confirmLabel: 'Sign out', onConfirm: signOut,
+  });
+  const doDeleteAccount = () => showConfirm({
+    title: 'Delete account?', danger: true, icon: 'trash-2',
+    msg: 'This sends a deletion request to ClosetX ops. Your account stays active until it is processed.',
+    confirmLabel: 'Request deletion',
+    onConfirm: async () => {
+      try {
+        await api.requestAccountDeletion();
+        showToast('Deletion requested', 'Ops will process this and follow up.', 'trash-2');
+      } catch (e) {
+        showToast('Request failed', isApiError(e) ? e.message : 'Please try again', 'alert-circle');
+      }
+    },
   });
 
   return (
@@ -109,7 +124,8 @@ export default function ProfileScreen() {
             </Pressable>
           ))}
 
-          <View style={{ marginTop: SP.xl }}>
+          <View style={{ marginTop: SP.xl, gap: SP.s }}>
+            <BrutalButton label="Delete account" variant="outline" icon="trash-2" block onPress={doDeleteAccount} />
             <BrutalButton label="Sign out" variant="outline" icon="log-out" block onPress={doSignOut} />
           </View>
           <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.dim, textAlign: 'center', marginTop: SP.l }}>TRENDZO DELIVERY · AGENT APP · v1.0</Text>

@@ -182,6 +182,9 @@ export const earningsSummary = () => apiGet<EarningsSummary>('/driver/earnings/s
 export const getProfile = () => apiGet<DriverProfile>('/driver/profile');
 export const updateProfile = (patch: Partial<Omit<DriverProfile, 'id' | 'phone' | 'status'>>) =>
   apiPatch<DriverProfile>('/driver/profile', patch);
+/** Self-service account-deletion request (stub: recorded for ops, not auto-processed). */
+export const requestAccountDeletion = (reason?: string) =>
+  apiPost<{ received: boolean }>('/driver/profile/delete-request', reason ? { reason } : {});
 
 /* ── Media ────────────────────────────────────────────────────────────── */
 /** Upload a captured photo (RN file uri) to Cloudinary; returns the hosted URL. */
