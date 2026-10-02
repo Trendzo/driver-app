@@ -1,8 +1,7 @@
-// Trendzo Partner auth — phone-OTP login (MSG91). First OTP verify creates the driver
+// Trendzo Partner auth — phone-OTP login (MSG91 or Slide, per the backend). First OTP verify creates the driver
 // account server-side (instant-active), so this is the only sign-in surface: there is no
 // email login and no separate signup form.
 import React, { useEffect, useRef, useState } from 'react';
-import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -26,26 +25,11 @@ import {
   spacing,
 } from '../ui';
 import { useApp } from '../state/AppState';
-import { driverOtpLogin } from '../api';
+import { driverOtpLogin, fetchOtpConfig } from '../api';
 import { isApiError } from '../api/errors';
-import { MSG91_WIDGET_ID, MSG91_TOKEN_AUTH } from '../config/env';
+import { useOtp } from '../services/otp';
 
 const VEHICLES = ['Bike', 'Scooter', 'Car', 'Bicycle'];
-const OTP_TIMEOUT_MS = 20000;
-
-/**
- * MSG91's SDK fires a bare `fetch` with no timeout. On a stalled network the promise
- * never settles, `busy` stays true forever, and every later tap is swallowed by the
- * re-entrancy guard — the button goes permanently dead with nothing on screen. Always
- * settle, so the user gets an error they can act on.
- */
-function withTimeout<T>(p: Promise<T>, message: string, ms = OTP_TIMEOUT_MS): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  return Promise.race([
-    p,
-    new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); }),
-  ]).finally(() => clearTimeout(timer)) as Promise<T>;
-}
 
 export default function AuthScreen() {
   // Phone OTP is the only sign-in the backend supports, and it creates the driver
@@ -74,37 +58,29 @@ function LoginView() {
   const { signIn, showToast } = useApp();
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '']);
-  const [reqId, setReqId] = useState<string | null>(null);
+  // Phone OTP provider (MSG91 or Slide) as selected by the backend; see services/otp. The
+  // code length follows the provider, so the digit boxes are sized from it.
+  const otpClient = useOtp(fetchOtpConfig);
+  const otpLength = otpClient.otpLength;
+  const [otp, setOtp] = useState<string[]>(() => Array(otpLength).fill(''));
   const [busy, setBusy] = useState(false);
-  const otpRefs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
+  const otpRefs = useRef<Array<TextInput | null>>([]);
 
   const phoneValid = phone.replace(/\D/g, '').length === 10;
 
+  // The config can land after the first render (and change the length): keep the boxes in step.
   useEffect(() => {
-    try {
-      OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
-    } catch {
-      // Native module not linked (pre dev-client rebuild) — sendOtp will surface a clear error.
-    }
-  }, []);
+    setOtp((cur) => (cur.length === otpLength ? cur : Array(otpLength).fill('')));
+  }, [otpLength]);
 
   const sendOtp = async () => {
     if (busy) return;
     if (!phoneValid) return showToast('Enter your number', 'A valid 10-digit mobile number', 'alert-circle');
-    if (!MSG91_WIDGET_ID) return showToast('OTP not configured', 'Set the MSG91 driver widget', 'alert-circle');
     Keyboard.dismiss();
     setBusy(true);
     try {
-      const res: any = await withTimeout(
-        OTPWidget.sendOTP({ identifier: `91${phone.replace(/\D/g, '')}` }),
-        "Couldn't reach the OTP service. Check your connection and try again.",
-      );
-      if (res?.type === 'error') throw new Error(res?.message || 'Could not send OTP');
-      const rid = typeof res === 'string' ? res : res?.message;
-      if (!rid) throw new Error('Could not send OTP');
-      setReqId(String(rid));
-      setOtp(['', '', '', '']);
+      await otpClient.send('91', phone.replace(/\D/g, ''));
+      setOtp(Array(otpClient.otpLength).fill(''));
       setStep('otp');
       showToast('OTP sent', `Code sent to +91 ${phone}`, 'message-square');
     } catch (e: any) {
@@ -116,17 +92,11 @@ function LoginView() {
 
   const resendOtp = async () => {
     if (busy) return;
-    // Previously this only faked a toast — no code was ever re-sent.
-    if (!reqId) return sendOtp();
     setBusy(true);
     try {
-      const res: any = await withTimeout(
-        OTPWidget.retryOTP({ reqId, retryChannel: 11 }),
-        "Couldn't reach the OTP service. Check your connection and try again.",
-      );
-      if (res?.type === 'error') throw new Error(res?.message || 'Could not resend OTP');
-      setOtp(['', '', '', '']);
-      otpRefs[0].current?.focus();
+      await otpClient.resend();
+      setOtp(Array(otpLength).fill(''));
+      otpRefs.current[0]?.focus();
       showToast('OTP resent', `New code sent to +91 ${phone}`, 'refresh-cw');
     } catch (e: any) {
       showToast('Could not resend', e?.message ?? 'Try again', 'alert-circle');
@@ -137,12 +107,12 @@ function LoginView() {
   const setDigit = (i: number, v: string) => {
     const digits = v.replace(/\D/g, '');
     // iOS one-time-code autofill (and paste) drops the whole code into a single box —
-    // taking only the last character silently threw away 3 of the 4 digits. Only a full
-    // code claims all four boxes; anything shorter is ordinary typing into one box.
-    if (digits.length >= 4) {
-      const next = digits.slice(-4).split('');
+    // taking only the last character silently threw away all but one digit. Only a full
+    // code claims every box; anything shorter is ordinary typing into one box.
+    if (digits.length >= otpLength) {
+      const next = digits.slice(-otpLength).split('');
       setOtp(next);
-      otpRefs[3].current?.focus();
+      otpRefs.current[otpLength - 1]?.focus();
       Keyboard.dismiss();
       return;
     }
@@ -150,7 +120,7 @@ function LoginView() {
     const next = [...otp];
     next[i] = d;
     setOtp(next);
-    if (d && i < 3) otpRefs[i + 1].current?.focus();
+    if (d && i < otpLength - 1) otpRefs.current[i + 1]?.focus();
   };
   const verify = async () => {
     if (busy) return;
@@ -158,18 +128,11 @@ function LoginView() {
     // Dismiss first: on a tablet the keyboard covers the lower third of the screen, and
     // every outcome of this call reports itself down there.
     Keyboard.dismiss();
-    if (code.length < 4) return showToast('Enter the code', 'Type all 4 digits', 'alert-circle');
-    if (!reqId) return showToast('Request a new code', 'Tap "Resend code" to get a fresh OTP', 'refresh-cw');
+    if (code.length < otpLength) return showToast('Enter the code', `Type all ${otpLength} digits`, 'alert-circle');
     setBusy(true);
     try {
-      const vr: any = await withTimeout(
-        OTPWidget.verifyOTP({ reqId, otp: code }),
-        "Couldn't reach the OTP service. Check your connection and try again.",
-      );
-      if (vr?.type === 'error') throw new Error(vr?.message || 'Invalid OTP');
-      const accessToken = typeof vr === 'string' ? vr : vr?.message;
-      if (!accessToken) throw new Error('Verification failed');
-      const { token, driver, isNew } = await driverOtpLogin(String(accessToken));
+      const { accessToken, provider } = await otpClient.verify(code);
+      const { token, driver, isNew } = await driverOtpLogin(accessToken, provider);
       signIn({ token, phone: `+91 ${phone}`, driver, isNew });
     } catch (e: any) {
       showToast('Sign-in failed', isApiError(e) ? e.message : (e?.message ?? 'Invalid OTP'), 'alert-circle');
@@ -205,21 +168,21 @@ function LoginView() {
                 {otp.map((d, i) => (
                   <TextInput
                     key={i}
-                    ref={otpRefs[i]}
+                    ref={(r) => { otpRefs.current[i] = r; }}
                     value={d}
                     onChangeText={(v) => setDigit(i, v)}
-                    onKeyPress={({ nativeEvent }) => { if (nativeEvent.key === 'Backspace' && !otp[i] && i > 0) otpRefs[i - 1].current?.focus(); }}
+                    onKeyPress={({ nativeEvent }) => { if (nativeEvent.key === 'Backspace' && !otp[i] && i > 0) otpRefs.current[i - 1]?.focus(); }}
                     keyboardType="number-pad"
                     textContentType="oneTimeCode"
                     autoComplete="one-time-code"
-                    maxLength={i === 0 ? 4 : 1}
+                    maxLength={i === 0 ? otpLength : 1}
                     style={[styles.otpBox, d ? styles.otpBoxFilled : null]}
                   />
                 ))}
               </View>
               <View style={styles.hintRow}>
                 <Icon name="information-circle-outline" size={15} color={colors.meta} />
-                <AppText variant="meta" color={colors.meta}>Enter the 4-digit code we texted you</AppText>
+                <AppText variant="meta" color={colors.meta}>Enter the {otpLength}-digit code we texted you</AppText>
               </View>
               <Button label={busy ? 'Verifying…' : 'Verify & continue'} tone="accent" loading={busy} disabled={busy} onPress={verify} icon={<Icon name="checkmark" size={18} color={colors.accentInk} />} />
               <Pressable onPress={resendOtp} disabled={busy} style={styles.center}>

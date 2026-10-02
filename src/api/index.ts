@@ -1,6 +1,7 @@
 // Typed endpoint functions for the ClosetX driver backend (/driver/*, /auth/driver/*).
 import { API_URL } from '../config/env';
 import { apiGet, apiPatch, apiPost, apiUpload } from './client';
+import type { OtpConfig } from '../services/otp';
 
 export type BackendDeliveryItem = {
   id: string;
@@ -96,12 +97,15 @@ export type DoorItemDecision = {
 };
 
 /* ── Auth ─────────────────────────────────────────────────────────────── */
-export function driverOtpLogin(accessToken: string) {
+export function driverOtpLogin(accessToken: string, provider: 'msg91' | 'slide') {
   return apiPost<{ token: string; driver: DriverProfile; isNew: boolean }>(
-    '/auth/driver/otp/msg91',
-    { accessToken },
+    '/auth/driver/otp/login',
+    { accessToken, provider },
   );
 }
+
+/** Which OTP provider to use (and Slide's public client config). Public, no auth. */
+export const fetchOtpConfig = () => apiGet<OtpConfig>('/auth/otp-config');
 
 /* ── Broadcast offers ─────────────────────────────────────────────────── */
 export const listOffers = () => apiGet<BackendDelivery[]>('/driver/offers');
